@@ -1,4 +1,4 @@
-import { useLayoutStore, Container, RelativePosition } from '../store/layoutStore';
+import { useLayoutStore, Container } from '../store/layoutStore';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -7,7 +7,7 @@ import { Trash2 } from 'lucide-react';
 import { devices } from '../config/devices';
 
 export const PropertiesPanel = () => {
-  const { containers, selectedId, selectedDevice, updateContainer, deleteContainer, setSelectedDevice, updateRelativePosition } = useLayoutStore();
+  const { containers, selectedId, selectedDevice, updateContainer, deleteContainer, setSelectedDevice } = useLayoutStore();
   const selectedContainer = containers.find((c) => c.id === selectedId);
 
   if (!selectedContainer) {
@@ -43,17 +43,6 @@ export const PropertiesPanel = () => {
 
   const handleChange = (key: keyof Container['portrait'], value: string | number, orientation: 'portrait' | 'landscape') => {
     updateContainer(selectedId!, { [key]: value }, orientation);
-  };
-
-  const handleRelativePositionChange = (updates: Partial<RelativePosition>) => {
-    const currentPosition = selectedContainer.relativePosition || {
-      referenceId: 'SCREEN',
-      referenceEdge: 'top',
-      targetEdge: 'top',
-      gap: 0,
-      gapUnit: 'pixel',
-    };
-    updateRelativePosition(selectedId!, { ...currentPosition, ...updates });
   };
 
   return (
@@ -96,102 +85,6 @@ export const PropertiesPanel = () => {
           }}
           className="bg-editor-grid text-white border-editor-grid"
         />
-      </div>
-
-      <div className="space-y-4">
-        <h4 className="font-medium text-white">Relative Positioning</h4>
-        <div className="space-y-2">
-          <Label className="text-gray-400">Reference</Label>
-          <Select
-            value={selectedContainer.relativePosition?.referenceId || ''}
-            onValueChange={(value) => {
-              if (value === '') {
-                updateRelativePosition(selectedId!, undefined);
-              } else {
-                handleRelativePositionChange({ referenceId: value });
-              }
-            }}
-          >
-            <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
-              <SelectValue placeholder="None (Absolute)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">None (Absolute)</SelectItem>
-              <SelectItem value="SCREEN">Screen</SelectItem>
-              {containers
-                .filter((c) => c.id !== selectedId)
-                .map((container) => (
-                  <SelectItem key={container.id} value={container.id}>
-                    {container.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {selectedContainer.relativePosition && (
-          <>
-            <div className="space-y-2">
-              <Label className="text-gray-400">Reference Edge</Label>
-              <Select
-                value={selectedContainer.relativePosition.referenceEdge}
-                onValueChange={(value) => handleRelativePositionChange({ referenceEdge: value as RelativePosition['referenceEdge'] })}
-              >
-                <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="top">Top</SelectItem>
-                  <SelectItem value="bottom">Bottom</SelectItem>
-                  <SelectItem value="left">Left</SelectItem>
-                  <SelectItem value="right">Right</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-gray-400">Target Edge</Label>
-              <Select
-                value={selectedContainer.relativePosition.targetEdge}
-                onValueChange={(value) => handleRelativePositionChange({ targetEdge: value as RelativePosition['targetEdge'] })}
-              >
-                <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="top">Top</SelectItem>
-                  <SelectItem value="bottom">Bottom</SelectItem>
-                  <SelectItem value="left">Left</SelectItem>
-                  <SelectItem value="right">Right</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-gray-400">Gap</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  value={selectedContainer.relativePosition.gap}
-                  onChange={(e) => handleRelativePositionChange({ gap: parseFloat(e.target.value) })}
-                  className="bg-editor-grid text-white border-editor-grid"
-                />
-                <Select
-                  value={selectedContainer.relativePosition.gapUnit}
-                  onValueChange={(value) => handleRelativePositionChange({ gapUnit: value as 'pixel' | 'percent' })}
-                >
-                  <SelectTrigger className="bg-editor-grid text-white border-editor-grid w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pixel">Pixels</SelectItem>
-                    <SelectItem value="percent">Percent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </>
-        )}
       </div>
 
       <div className="space-y-4">
