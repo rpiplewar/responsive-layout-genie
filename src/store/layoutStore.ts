@@ -7,11 +7,20 @@ export interface ContainerPosition {
   height: number;
 }
 
+export interface RelativePosition {
+  referenceId: string | 'SCREEN';
+  referenceEdge: 'top' | 'bottom' | 'left' | 'right';
+  targetEdge: 'top' | 'bottom' | 'left' | 'right';
+  gap: number;
+  gapUnit: 'pixel' | 'percent';
+}
+
 export interface Container {
   id: string;
   name: string;
   portrait: ContainerPosition;
   landscape: ContainerPosition;
+  relativePosition?: RelativePosition;
 }
 
 interface LayoutState {
@@ -23,9 +32,10 @@ interface LayoutState {
   deleteContainer: (id: string) => void;
   setSelectedId: (id: string | null) => void;
   setSelectedDevice: (device: string) => void;
+  getExportData: () => Record<'PORTRAIT' | 'LANDSCAPE', Record<string, { x: number; y: number; width: number; height: number }>>;
 }
 
-export const useLayoutStore = create<LayoutState>((set) => ({
+export const useLayoutStore = create<LayoutState>((set, get) => ({
   containers: [],
   selectedId: null,
   selectedDevice: 'iPhone SE',
@@ -69,4 +79,30 @@ export const useLayoutStore = create<LayoutState>((set) => ({
     })),
   setSelectedId: (id) => set({ selectedId: id }),
   setSelectedDevice: (device) => set({ selectedDevice: device }),
+  getExportData: () => {
+    const { containers } = get();
+    const { selectedDevice } = get();
+    const device = devices[selectedDevice];
+
+    return {
+      PORTRAIT: containers.reduce((acc, container) => ({
+        ...acc,
+        [container.name]: {
+          x: container.portrait.x / device.width,
+          y: container.portrait.y / device.height,
+          width: container.portrait.width / device.width,
+          height: container.portrait.height / device.height,
+        },
+      }), {}),
+      LANDSCAPE: containers.reduce((acc, container) => ({
+        ...acc,
+        [container.name]: {
+          x: container.landscape.x / device.height,
+          y: container.landscape.y / device.width,
+          width: container.landscape.width / device.height,
+          height: container.landscape.height / device.width,
+        },
+      }), {}),
+    };
+  },
 }));

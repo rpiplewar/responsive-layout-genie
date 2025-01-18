@@ -3,34 +3,14 @@ import { Canvas } from '@/components/Canvas';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { useLayoutStore } from '../store/layoutStore';
 import { Download, Plus } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
-  const { containers, addContainer } = useLayoutStore();
+  const { addContainer, getExportData } = useLayoutStore();
   const { toast } = useToast();
 
   const handleExport = () => {
-    const layout = {
-      PORTRAIT: containers.reduce((acc, container) => ({
-        ...acc,
-        [container.name]: {
-          x: container.portrait.x / 400,
-          y: container.portrait.y / 600,
-          width: container.portrait.width / 400,
-          height: container.portrait.height / 600,
-        },
-      }), {}),
-      LANDSCAPE: containers.reduce((acc, container) => ({
-        ...acc,
-        [container.name]: {
-          x: container.landscape.x / 600,
-          y: container.landscape.y / 400,
-          width: container.landscape.width / 600,
-          height: container.landscape.height / 400,
-        },
-      }), {}),
-    };
-
+    const layout = getExportData();
     const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
