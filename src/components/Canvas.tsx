@@ -27,9 +27,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   }, [selectedId]);
 
   const handleDragMove = (e: KonvaEventObject<DragEvent>, id: string) => {
+    const node = e.target;
+    const centerX = node.x() + node.width() / 2;
+    const centerY = node.y() + node.height() / 2;
+    
     updateContainer(id, {
-      x: e.target.x(),
-      y: e.target.y(),
+      x: centerX,
+      y: centerY,
     }, orientation);
   };
 
@@ -41,11 +45,16 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     node.scaleX(1);
     node.scaleY(1);
 
+    const newWidth = Math.max(5, node.width() * scaleX);
+    const newHeight = Math.max(5, node.height() * scaleY);
+    const centerX = node.x() + newWidth / 2;
+    const centerY = node.y() + newHeight / 2;
+
     updateContainer(id, {
-      x: node.x(),
-      y: node.y(),
-      width: Math.max(5, node.width() * scaleX),
-      height: Math.max(5, node.height() * scaleY),
+      x: centerX,
+      y: centerY,
+      width: newWidth,
+      height: newHeight,
     }, orientation);
   };
 
@@ -93,13 +102,16 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             {/* Containers */}
             {containers.map((container) => {
               const position = container[orientation];
+              const x = position.x - position.width / 2;
+              const y = position.y - position.height / 2;
+              
               return (
                 <Group key={container.id}>
                   <Rect
                     ref={container.id === selectedId ? selectedShapeRef : undefined}
                     id={container.id}
-                    x={position.x}
-                    y={position.y}
+                    x={x}
+                    y={y}
                     width={position.width}
                     height={position.height}
                     fill={selectedId === container.id ? '#bb9af7' : '#7aa2f7'}

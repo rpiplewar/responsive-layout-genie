@@ -35,6 +35,12 @@ export const PropertiesPanel = () => {
     );
   }
 
+  const device = devices[selectedDevice];
+
+  const getPercentage = (value: number, dimension: number) => {
+    return ((value / dimension) * 100).toFixed(2);
+  };
+
   const handleChange = (key: keyof Container['portrait'], value: string | number, orientation: 'portrait' | 'landscape') => {
     updateContainer(selectedId!, { [key]: value }, orientation);
   };
@@ -85,43 +91,63 @@ export const PropertiesPanel = () => {
         <h4 className="font-medium text-white">Portrait Mode</h4>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-2">
-            <Label className="text-gray-400">X</Label>
-            <Input
-              type="number"
-              value={selectedContainer.portrait.x}
-              onChange={(e) => handleChange('x', parseFloat(e.target.value), 'portrait')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <Label className="text-gray-400">Center X</Label>
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.portrait.x}
+                onChange={(e) => handleChange('x', parseFloat(e.target.value), 'portrait')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.portrait.x, device.width)}%
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-gray-400">Y</Label>
-            <Input
-              type="number"
-              value={selectedContainer.portrait.y}
-              onChange={(e) => handleChange('y', parseFloat(e.target.value), 'portrait')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <Label className="text-gray-400">Center Y</Label>
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.portrait.y}
+                onChange={(e) => handleChange('y', parseFloat(e.target.value), 'portrait')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.portrait.y, device.height)}%
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-2">
             <Label className="text-gray-400">Width</Label>
-            <Input
-              type="number"
-              value={selectedContainer.portrait.width}
-              onChange={(e) => handleChange('width', parseFloat(e.target.value), 'portrait')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.portrait.width}
+                onChange={(e) => handleChange('width', parseFloat(e.target.value), 'portrait')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.portrait.width, device.width)}%
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-gray-400">Height</Label>
-            <Input
-              type="number"
-              value={selectedContainer.portrait.height}
-              onChange={(e) => handleChange('height', parseFloat(e.target.value), 'portrait')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.portrait.height}
+                onChange={(e) => handleChange('height', parseFloat(e.target.value), 'portrait')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.portrait.height, device.height)}%
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -130,43 +156,63 @@ export const PropertiesPanel = () => {
         <h4 className="font-medium text-white">Landscape Mode</h4>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-2">
-            <Label className="text-gray-400">X</Label>
-            <Input
-              type="number"
-              value={selectedContainer.landscape.x}
-              onChange={(e) => handleChange('x', parseFloat(e.target.value), 'landscape')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <Label className="text-gray-400">Center X</Label>
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.landscape.x}
+                onChange={(e) => handleChange('x', parseFloat(e.target.value), 'landscape')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.landscape.x, device.height)}%
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-gray-400">Y</Label>
-            <Input
-              type="number"
-              value={selectedContainer.landscape.y}
-              onChange={(e) => handleChange('y', parseFloat(e.target.value), 'landscape')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <Label className="text-gray-400">Center Y</Label>
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.landscape.y}
+                onChange={(e) => handleChange('y', parseFloat(e.target.value), 'landscape')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.landscape.y, device.width)}%
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-2">
             <Label className="text-gray-400">Width</Label>
-            <Input
-              type="number"
-              value={selectedContainer.landscape.width}
-              onChange={(e) => handleChange('width', parseFloat(e.target.value), 'landscape')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.landscape.width}
+                onChange={(e) => handleChange('width', parseFloat(e.target.value), 'landscape')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.landscape.width, device.height)}%
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-gray-400">Height</Label>
-            <Input
-              type="number"
-              value={selectedContainer.landscape.height}
-              onChange={(e) => handleChange('height', parseFloat(e.target.value), 'landscape')}
-              className="bg-editor-grid text-white border-editor-grid"
-            />
+            <div className="space-y-1">
+              <Input
+                type="number"
+                value={selectedContainer.landscape.height}
+                onChange={(e) => handleChange('height', parseFloat(e.target.value), 'landscape')}
+                className="bg-editor-grid text-white border-editor-grid"
+              />
+              <div className="text-xs text-gray-400">
+                {getPercentage(selectedContainer.landscape.height, device.width)}%
+              </div>
+            </div>
           </div>
         </div>
       </div>
