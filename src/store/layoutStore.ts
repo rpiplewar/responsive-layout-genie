@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devices } from '../config/devices';
 
 export interface ContainerPosition {
   x: number;
