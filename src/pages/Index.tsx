@@ -14,19 +14,19 @@ const Index = () => {
       PORTRAIT: containers.reduce((acc, container) => ({
         ...acc,
         [container.name]: {
-          x: container.x / 400, // normalize to 0-1
-          y: container.y / 600,
-          width: container.width / 400,
-          height: container.height / 600,
+          x: container.portrait.x / 400,
+          y: container.portrait.y / 600,
+          width: container.portrait.width / 400,
+          height: container.portrait.height / 600,
         },
       }), {}),
       LANDSCAPE: containers.reduce((acc, container) => ({
         ...acc,
         [container.name]: {
-          x: container.x / 600,
-          y: container.y / 400,
-          width: container.width / 600,
-          height: container.height / 400,
+          x: container.landscape.x / 600,
+          y: container.landscape.y / 400,
+          width: container.landscape.width / 600,
+          height: container.landscape.height / 400,
         },
       }), {}),
     };
@@ -74,18 +74,14 @@ const Index = () => {
       </div>
 
       <div className="flex gap-4 p-4">
-        <div className="flex-1 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Portrait Mode (400x600)</h2>
-            <div className="border border-editor-grid rounded-lg overflow-hidden">
-              <Canvas orientation="portrait" width={400} height={600} />
-            </div>
+        <div className="flex-1 space-x-4 flex">
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold mb-2">Portrait Mode</h2>
+            <Canvas orientation="portrait" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Landscape Mode (600x400)</h2>
-            <div className="border border-editor-grid rounded-lg overflow-hidden">
-              <Canvas orientation="landscape" width={600} height={400} />
-            </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-semibold mb-2">Landscape Mode</h2>
+            <Canvas orientation="landscape" />
           </div>
         </div>
         <PropertiesPanel />
