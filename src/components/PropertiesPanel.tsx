@@ -1,4 +1,4 @@
-import { useLayoutStore, Container } from '../store/layoutStore';
+import { useLayoutStore, Container, AssetTransform } from '../store/layoutStore';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, ArrowLeft } from 'lucide-react';
 import { devices } from '../config/devices';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const PropertiesPanel = () => {
   const { 
@@ -504,3 +505,4 @@ export const PropertiesPanel = () => {
     </div>
   );
 };
+
