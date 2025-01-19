@@ -1,11 +1,40 @@
 import { create } from 'zustand';
 import { devices } from '../config/devices';
 
-export interface ContainerPosition {
+export interface Position {
   x: number;
   y: number;
+}
+
+export interface Size {
   width: number;
   height: number;
+}
+
+export interface ContainerPosition extends Position, Size {}
+
+export interface AssetReference {
+  reference: 'container' | string;
+  x: number;
+  y: number;
+}
+
+export interface AssetTransform {
+  position: AssetReference;
+  size: Size;
+  origin: Position;
+  scaleMode: 'fit' | 'fill' | 'stretch';
+  maintainAspectRatio: boolean;
+  rotation: number;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  type: 'image';
+  key: string;
+  portrait: AssetTransform;
+  landscape: AssetTransform;
 }
 
 export interface Container {
@@ -14,19 +43,25 @@ export interface Container {
   portrait: ContainerPosition;
   landscape: ContainerPosition;
   parentId?: string;
-  children?: { [key: string]: Container };
+  assets: { [key: string]: Asset };
 }
 
 interface LayoutState {
   containers: Container[];
   selectedId: string | null;
+  selectedAssetId: string | null;
   selectedDevice: string;
   addContainer: (parentId?: string) => void;
+  addAsset: (containerId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
+  updateAsset: (containerId: string, assetId: string, updates: Partial<AssetTransform>, orientation: 'portrait' | 'landscape') => void;
   deleteContainer: (id: string) => void;
+  deleteAsset: (containerId: string, assetId: string) => void;
   setSelectedId: (id: string | null) => void;
+  setSelectedAssetId: (id: string | null) => void;
   setSelectedDevice: (device: string) => void;
   updateContainerName: (id: string, name: string) => void;
+  updateAssetName: (containerId: string, assetId: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
   getExportData: () => any;
 }
@@ -34,11 +69,12 @@ interface LayoutState {
 export const useLayoutStore = create<LayoutState>((set, get) => ({
   containers: [],
   selectedId: null,
+  selectedAssetId: null,
   selectedDevice: 'iPhone SE',
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
-    const parentPos = parent ? (parent.portrait) : null;
+    const parentPos = parent ? parent.portrait : null;
     
     const newContainer: Container = {
       id: crypto.randomUUID(),
@@ -56,11 +92,57 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         height: parentPos ? parentPos.height * 0.5 : 100,
       },
       parentId,
+      assets: {},
     };
 
     set((state) => ({
       containers: [...state.containers, newContainer],
       selectedId: newContainer.id,
+    }));
+  },
+
+  addAsset: (containerId: string) => {
+    const container = get().containers.find(c => c.id === containerId);
+    if (!container) return;
+
+    const newAsset: Asset = {
+      id: crypto.randomUUID(),
+      name: `Asset ${Date.now()}`,
+      type: 'image',
+      key: '',
+      portrait: {
+        position: {
+          reference: 'container',
+          x: 0.5,
+          y: 0.5,
+        },
+        size: { width: 0.5, height: 0.5 },
+        origin: { x: 0.5, y: 0.5 },
+        scaleMode: 'fit',
+        maintainAspectRatio: true,
+        rotation: 0,
+      },
+      landscape: {
+        position: {
+          reference: 'container',
+          x: 0.5,
+          y: 0.5,
+        },
+        size: { width: 0.5, height: 0.5 },
+        origin: { x: 0.5, y: 0.5 },
+        scaleMode: 'fit',
+        maintainAspectRatio: true,
+        rotation: 0,
+      },
+    };
+
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
+          : c
+      ),
+      selectedAssetId: newAsset.id,
     }));
   },
 
@@ -93,6 +175,65 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       ),
     })),
 
+  updateAsset: (containerId: string, assetId: string, updates: Partial<AssetTransform>, orientation: 'portrait' | 'landscape') => {
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? {
+              ...c,
+              assets: {
+                ...c.assets,
+                [assetId]: {
+                  ...c.assets[assetId],
+                  [orientation]: {
+                    ...c.assets[assetId][orientation],
+                    ...updates,
+                  },
+                },
+              },
+            }
+          : c
+      ),
+    }));
+  },
+
+  deleteAsset: (containerId: string, assetId: string) => {
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? {
+              ...c,
+              assets: Object.fromEntries(
+                Object.entries(c.assets).filter(([id]) => id !== assetId)
+              ),
+            }
+          : c
+      ),
+      selectedAssetId: state.selectedAssetId === assetId ? null : state.selectedAssetId,
+    }));
+  },
+
+  setSelectedAssetId: (id) => set({ selectedAssetId: id }),
+
+  updateAssetName: (containerId: string, assetId: string, name: string) => {
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? {
+              ...c,
+              assets: {
+                ...c.assets,
+                [assetId]: {
+                  ...c.assets[assetId],
+                  name,
+                },
+              },
+            }
+          : c
+      ),
+    }));
+  },
+
   getContainerPath: (id) => {
     const containers = get().containers;
     const path: Container[] = [];
@@ -107,8 +248,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   getExportData: () => {
-    const { containers, selectedDevice } = get();
-    const device = devices[selectedDevice];
+    const { containers } = get();
+    const device = devices[get().selectedDevice];
 
     const processContainer = (container: Container): any => {
       const result: any = {
@@ -123,8 +264,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           y: container.landscape.y / device.width,
           width: container.landscape.width / device.height,
           height: container.landscape.height / device.width,
-        }
+        },
       };
+
+      if (Object.keys(container.assets).length > 0) {
+        result.assets = container.assets;
+      }
 
       const children = containers
         .filter(c => c.parentId === container.id)

@@ -2,12 +2,14 @@ import { Button } from '@/components/ui/button';
 import { Canvas } from '@/components/Canvas';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { useLayoutStore } from '../store/layoutStore';
-import { Download, Plus, Clipboard } from 'lucide-react';
+import { Download, Plus, Clipboard, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 const Index = () => {
   const { addContainer, getExportData } = useLayoutStore();
   const { toast } = useToast();
+  const [isCopied, setIsCopied] = useState(false);
 
   const handleAddContainer = () => {
     addContainer();
@@ -31,14 +33,17 @@ const Index = () => {
     });
   };
 
-  const handleCopyToClipboard = () => {
+  const handleCopyToClipboard = async () => {
     const layout = getExportData();
-    navigator.clipboard.writeText(JSON.stringify(layout, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify(layout, null, 2));
+    setIsCopied(true);
     
     toast({
       title: "Layout copied to clipboard",
       description: "The layout JSON has been copied to your clipboard",
     });
+
+    setTimeout(() => setIsCopied(false), 2000);
   };
 
   return (
@@ -60,8 +65,12 @@ const Index = () => {
               className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
               onClick={handleCopyToClipboard}
             >
-              <Clipboard className="h-4 w-4 mr-2" />
-              Copy to Clipboard
+              {isCopied ? (
+                <Check className="h-4 w-4 mr-2" />
+              ) : (
+                <Clipboard className="h-4 w-4 mr-2" />
+              )}
+              {isCopied ? 'Copied!' : 'Copy to Clipboard'}
             </Button>
             <Button
               variant="outline"

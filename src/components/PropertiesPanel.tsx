@@ -11,17 +11,24 @@ export const PropertiesPanel = () => {
   const { 
     containers, 
     selectedId, 
+    selectedAssetId,
     selectedDevice, 
     updateContainer, 
     deleteContainer, 
-    setSelectedId, 
+    setSelectedId,
     setSelectedDevice,
     updateContainerName,
     getContainerPath,
-    addContainer
+    addContainer,
+    addAsset,
+    updateAsset,
+    deleteAsset,
+    updateAssetName,
+    setSelectedAssetId,
   } = useLayoutStore();
 
   const selectedContainer = containers.find((c) => c.id === selectedId);
+  const selectedAsset = selectedContainer?.assets[selectedAssetId ?? ''];
   const containerPath = selectedId ? getContainerPath(selectedId) : [];
 
   if (!selectedContainer) {
@@ -48,6 +55,18 @@ export const PropertiesPanel = () => {
       </div>
     );
   }
+
+  const handleAddAsset = () => {
+    if (selectedId) {
+      addAsset(selectedId);
+    }
+  };
+
+  const handleAssetChange = (key: keyof AssetTransform, value: any, orientation: 'portrait' | 'landscape') => {
+    if (selectedId && selectedAssetId) {
+      updateAsset(selectedId, selectedAssetId, { [key]: value }, orientation);
+    }
+  };
 
   const device = devices[selectedDevice];
 
@@ -101,6 +120,8 @@ export const PropertiesPanel = () => {
         </Breadcrumb>
       )}
 
+      {selectedContainer && (
+        <>
       <div className="space-y-2">
         <Label className="text-gray-400">Device</Label>
         <Select value={selectedDevice} onValueChange={setSelectedDevice}>
@@ -277,6 +298,209 @@ export const PropertiesPanel = () => {
           </div>
         </div>
       </div>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="font-medium text-white">Assets</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+                onClick={handleAddAsset}
+              >
+                Add Asset
+              </Button>
+            </div>
+
+            {Object.values(selectedContainer.assets).map((asset) => (
+              <div
+                key={asset.id}
+                className={`p-2 rounded border ${
+                  selectedAssetId === asset.id
+                    ? 'border-editor-accent bg-editor-accent/20'
+                    : 'border-editor-grid'
+                }`}
+                onClick={() => setSelectedAssetId(asset.id)}
+              >
+                <div className="flex justify-between items-center">
+                  <Input
+                    value={asset.name}
+                    onChange={(e) => updateAssetName(selectedId!, asset.id, e.target.value)}
+                    className="bg-editor-grid text-white border-editor-grid"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-red-500 hover:text-red-400"
+                    onClick={() => deleteAsset(selectedId!, asset.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {selectedAsset && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-white">Asset Properties</h4>
+                
+                <div className="space-y-2">
+                  <Label className="text-gray-400">Reference</Label>
+                  <Select
+                    value={selectedAsset.portrait.position.reference}
+                    onValueChange={(value) =>
+                      handleAssetChange(
+                        'position',
+                        { ...selectedAsset.portrait.position, reference: value },
+                        'portrait'
+                      )
+                    }
+                  >
+                    <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="container">Container</SelectItem>
+                      {Object.values(selectedContainer.assets)
+                        .filter((a) => a.id !== selectedAsset.id)
+                        .map((asset) => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label className="text-gray-400">Position X</Label>
+                    <Input
+                      type="number"
+                      value={selectedAsset.portrait.position.x}
+                      onChange={(e) =>
+                        handleAssetChange(
+                          'position',
+                          {
+                            ...selectedAsset.portrait.position,
+                            x: parseFloat(e.target.value),
+                          },
+                          'portrait'
+                        )
+                      }
+                      className="bg-editor-grid text-white border-editor-grid"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-400">Position Y</Label>
+                    <Input
+                      type="number"
+                      value={selectedAsset.portrait.position.y}
+                      onChange={(e) =>
+                        handleAssetChange(
+                          'position',
+                          {
+                            ...selectedAsset.portrait.position,
+                            y: parseFloat(e.target.value),
+                          },
+                          'portrait'
+                        )
+                      }
+                      className="bg-editor-grid text-white border-editor-grid"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label className="text-gray-400">Width</Label>
+                    <Input
+                      type="number"
+                      value={selectedAsset.portrait.size.width}
+                      onChange={(e) =>
+                        handleAssetChange(
+                          'size',
+                          {
+                            ...selectedAsset.portrait.size,
+                            width: parseFloat(e.target.value),
+                          },
+                          'portrait'
+                        )
+                      }
+                      className="bg-editor-grid text-white border-editor-grid"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-400">Height</Label>
+                    <Input
+                      type="number"
+                      value={selectedAsset.portrait.size.height}
+                      onChange={(e) =>
+                        handleAssetChange(
+                          'size',
+                          {
+                            ...selectedAsset.portrait.size,
+                            height: parseFloat(e.target.value),
+                          },
+                          'portrait'
+                        )
+                      }
+                      className="bg-editor-grid text-white border-editor-grid"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-400">Scale Mode</Label>
+                  <Select
+                    value={selectedAsset.portrait.scaleMode}
+                    onValueChange={(value) =>
+                      handleAssetChange('scaleMode', value, 'portrait')
+                    }
+                  >
+                    <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fit">Fit</SelectItem>
+                      <SelectItem value="fill">Fill</SelectItem>
+                      <SelectItem value="stretch">Stretch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-gray-400">Rotation (degrees)</Label>
+                  <Input
+                    type="number"
+                    value={selectedAsset.portrait.rotation}
+                    onChange={(e) =>
+                      handleAssetChange('rotation', parseFloat(e.target.value), 'portrait')
+                    }
+                    className="bg-editor-grid text-white border-editor-grid"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="maintainAspectRatio"
+                    checked={selectedAsset.portrait.maintainAspectRatio}
+                    onCheckedChange={(checked) =>
+                      handleAssetChange('maintainAspectRatio', checked, 'portrait')
+                    }
+                  />
+                  <Label
+                    htmlFor="maintainAspectRatio"
+                    className="text-gray-400"
+                  >
+                    Maintain Aspect Ratio
+                  </Label>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
