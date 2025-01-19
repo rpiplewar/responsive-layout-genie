@@ -3,12 +3,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, ArrowLeft } from 'lucide-react';
+import { Trash2, ArrowLeft, Upload } from 'lucide-react';
 import { devices } from '../config/devices';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 
 export const PropertiesPanel = () => {
+  const { toast } = useToast();
   const { 
     containers, 
     selectedId, 
@@ -26,6 +28,7 @@ export const PropertiesPanel = () => {
     deleteAsset,
     updateAssetName,
     setSelectedAssetId,
+    uploadImage,
   } = useLayoutStore();
 
   const selectedContainer = containers.find((c) => c.id === selectedId);
@@ -86,6 +89,17 @@ export const PropertiesPanel = () => {
   const handleParentSelect = () => {
     if (selectedContainer.parentId) {
       setSelectedId(selectedContainer.parentId);
+    }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && selectedId && selectedAssetId) {
+      uploadImage(selectedAssetId, file);
+      toast({
+        title: "Image uploaded",
+        description: "The image has been uploaded successfully",
+      });
     }
   };
 
@@ -346,6 +360,16 @@ export const PropertiesPanel = () => {
                 <h4 className="font-medium text-white">Asset Properties</h4>
                 
                 <div className="space-y-2">
+                  <Label className="text-gray-400">Upload Image</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="bg-editor-grid text-white border-editor-grid"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label className="text-gray-400">Reference</Label>
                   <Select
                     value={selectedAsset.portrait.position.reference}
@@ -505,4 +529,3 @@ export const PropertiesPanel = () => {
     </div>
   );
 };
-

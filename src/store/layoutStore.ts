@@ -51,6 +51,7 @@ interface LayoutState {
   selectedId: string | null;
   selectedAssetId: string | null;
   selectedDevice: string;
+  uploadedImages: { [key: string]: string }; // Add this new property
   addContainer: (parentId?: string) => void;
   addAsset: (containerId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
@@ -64,6 +65,7 @@ interface LayoutState {
   updateAssetName: (containerId: string, assetId: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
   getExportData: () => any;
+  uploadImage: (assetId: string, file: File) => void; // Add this new method
 }
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
@@ -71,6 +73,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   selectedId: null,
   selectedAssetId: null,
   selectedDevice: 'iPhone SE',
+  uploadedImages: {},
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
@@ -293,5 +296,18 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           [container.name]: processContainer(container)
         }), {})
     };
+  },
+
+  uploadImage: (assetId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      set((state) => ({
+        uploadedImages: {
+          ...state.uploadedImages,
+          [assetId]: e.target?.result as string
+        }
+      }));
+    };
+    reader.readAsDataURL(file);
   },
 }));

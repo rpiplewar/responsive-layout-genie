@@ -1,8 +1,9 @@
-import { Stage, Layer, Rect, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Rect, Group, Transformer, Image } from 'react-konva';
 import { useLayoutStore, Container } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef } from 'react';
 import { devices } from '../config/devices';
+import useImage from 'use-image';
 
 interface CanvasProps {
   orientation: 'portrait' | 'landscape';
@@ -11,7 +12,14 @@ interface CanvasProps {
 const GRID_SIZE = 20;
 
 export const Canvas = ({ orientation }: CanvasProps) => {
-  const { containers, selectedId, updateContainer, setSelectedId, selectedDevice } = useLayoutStore();
+  const { 
+    containers, 
+    selectedId, 
+    updateContainer, 
+    setSelectedId, 
+    selectedDevice,
+    uploadedImages 
+  } = useLayoutStore();
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
 
@@ -58,6 +66,44 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     }, orientation);
   };
 
+  const renderAsset = (containerId: string, asset: any) => {
+    const [image] = useImage(uploadedImages[asset.id]);
+    const container = containers.find(c => c.id === containerId);
+    if (!container || !image) return null;
+
+    const transform = asset[orientation];
+    const containerPos = container[orientation];
+    
+    let x = containerPos.x - containerPos.width / 2;
+    let y = containerPos.y - containerPos.height / 2;
+    
+    if (transform.position.reference === 'container') {
+      x += containerPos.width * transform.position.x;
+      y += containerPos.height * transform.position.y;
+    } else {
+      const refAsset = container.assets[transform.position.reference];
+      if (refAsset) {
+        const refTransform = refAsset[orientation];
+        x += refTransform.position.x;
+        y += refTransform.position.y;
+      }
+    }
+
+    return (
+      <Image
+        key={asset.id}
+        image={image}
+        x={x}
+        y={y}
+        width={transform.size.width * containerPos.width}
+        height={transform.size.height * containerPos.height}
+        offsetX={transform.origin.x * transform.size.width * containerPos.width}
+        offsetY={transform.origin.y * transform.size.height * containerPos.height}
+        rotation={transform.rotation}
+      />
+    );
+  };
+
   const renderContainer = (container: Container) => {
     const position = container[orientation];
     const x = position.x - position.width / 2;
@@ -84,6 +130,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           onDragMove={(e) => handleDragMove(e, container.id)}
           onTransform={(e) => handleTransform(e, container.id)}
         />
+        {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
       </Group>
     );
   };
