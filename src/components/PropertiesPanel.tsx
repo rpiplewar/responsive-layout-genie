@@ -357,30 +357,16 @@ export const PropertiesPanel = () => {
 
             {selectedAsset && (
               <div className="space-y-4">
-
-              <div className="space-y-4">
                 <h4 className="font-medium text-white">Asset Properties</h4>
                 
                 <div className="space-y-2">
                   <Label className="text-gray-400">Upload Image</Label>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      id="image-upload"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full bg-editor-grid border-editor-grid hover:bg-editor-accent/20 flex items-center gap-2"
-                      onClick={() => document.getElementById('image-upload')?.click()}
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload Image
-                    </Button>
-                  </div>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="bg-editor-grid text-white border-editor-grid"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -543,4 +529,3 @@ export const PropertiesPanel = () => {
     </div>
   );
 };
-
