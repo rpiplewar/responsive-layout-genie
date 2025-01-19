@@ -3,12 +3,26 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ArrowLeft } from 'lucide-react';
 import { devices } from '../config/devices';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 export const PropertiesPanel = () => {
-  const { containers, selectedId, selectedDevice, updateContainer, deleteContainer, setSelectedDevice } = useLayoutStore();
+  const { 
+    containers, 
+    selectedId, 
+    selectedDevice, 
+    updateContainer, 
+    deleteContainer, 
+    setSelectedId, 
+    setSelectedDevice,
+    updateContainerName,
+    getContainerPath,
+    addContainer
+  } = useLayoutStore();
+
   const selectedContainer = containers.find((c) => c.id === selectedId);
+  const containerPath = selectedId ? getContainerPath(selectedId) : [];
 
   if (!selectedContainer) {
     return (
@@ -45,6 +59,16 @@ export const PropertiesPanel = () => {
     updateContainer(selectedId!, { [key]: value }, orientation);
   };
 
+  const handleAddChild = () => {
+    addContainer(selectedId);
+  };
+
+  const handleParentSelect = () => {
+    if (selectedContainer.parentId) {
+      setSelectedId(selectedContainer.parentId);
+    }
+  };
+
   return (
     <div className="w-64 bg-editor-bg p-4 border-l border-editor-grid space-y-4">
       <div className="flex justify-between items-center">
@@ -58,6 +82,24 @@ export const PropertiesPanel = () => {
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
+
+      {containerPath.length > 0 && (
+        <Breadcrumb>
+          {containerPath.map((container, index) => (
+            <>
+              <BreadcrumbItem key={container.id}>
+                <BreadcrumbLink 
+                  onClick={() => setSelectedId(container.id)}
+                  className="text-sm text-gray-400 hover:text-white cursor-pointer"
+                >
+                  {container.name}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              {index < containerPath.length - 1 && <BreadcrumbSeparator />}
+            </>
+          ))}
+        </Breadcrumb>
+      )}
 
       <div className="space-y-2">
         <Label className="text-gray-400">Device</Label>
@@ -79,12 +121,31 @@ export const PropertiesPanel = () => {
         <Label className="text-gray-400">Name</Label>
         <Input
           value={selectedContainer.name}
-          onChange={(e) => {
-            const newContainer = { ...selectedContainer, name: e.target.value };
-            updateContainer(selectedId!, newContainer.portrait, 'portrait');
-          }}
+          onChange={(e) => updateContainerName(selectedId!, e.target.value)}
           className="bg-editor-grid text-white border-editor-grid"
         />
+      </div>
+
+      <div className="flex space-x-2">
+        {selectedContainer.parentId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+            onClick={handleParentSelect}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Parent
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+          onClick={handleAddChild}
+        >
+          Add Child
+        </Button>
       </div>
 
       <div className="space-y-4">

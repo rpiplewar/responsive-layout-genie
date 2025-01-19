@@ -58,6 +58,34 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     }, orientation);
   };
 
+  const renderContainer = (container: Container) => {
+    const position = container[orientation];
+    const x = position.x - position.width / 2;
+    const y = position.y - position.height / 2;
+    const isSelected = selectedId === container.id;
+    
+    return (
+      <Group key={container.id}>
+        <Rect
+          ref={isSelected ? selectedShapeRef : undefined}
+          id={container.id}
+          x={x}
+          y={y}
+          width={position.width}
+          height={position.height}
+          fill={isSelected ? '#bb9af7' : '#7aa2f7'}
+          opacity={0.3}
+          stroke={isSelected ? '#bb9af7' : '#7aa2f7'}
+          strokeWidth={container.parentId ? 2 : 1}
+          draggable
+          onClick={() => setSelectedId(container.id)}
+          onDragMove={(e) => handleDragMove(e, container.id)}
+          onTransform={(e) => handleTransform(e, container.id)}
+        />
+      </Group>
+    );
+  };
+
   return (
     <div className="relative">
       <div className="absolute inset-0 rounded-lg overflow-hidden border-2 border-editor-grid" style={{
@@ -100,32 +128,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             </Group>
 
             {/* Containers */}
-            {containers.map((container) => {
-              const position = container[orientation];
-              const x = position.x - position.width / 2;
-              const y = position.y - position.height / 2;
-              
-              return (
-                <Group key={container.id}>
-                  <Rect
-                    ref={container.id === selectedId ? selectedShapeRef : undefined}
-                    id={container.id}
-                    x={x}
-                    y={y}
-                    width={position.width}
-                    height={position.height}
-                    fill={selectedId === container.id ? '#bb9af7' : '#7aa2f7'}
-                    opacity={0.3}
-                    stroke={selectedId === container.id ? '#bb9af7' : '#7aa2f7'}
-                    strokeWidth={1}
-                    draggable
-                    onClick={() => setSelectedId(container.id)}
-                    onDragMove={(e) => handleDragMove(e, container.id)}
-                    onTransform={(e) => handleTransform(e, container.id)}
-                  />
-                </Group>
-              );
-            })}
+            {containers.map(renderContainer)}
 
             {selectedId && (
               <Transformer
