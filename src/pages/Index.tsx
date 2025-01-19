@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Canvas } from '@/components/Canvas';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { useLayoutStore } from '../store/layoutStore';
-import { Download, Plus } from 'lucide-react';
+import { Download, Plus, Clipboard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
@@ -31,6 +31,16 @@ const Index = () => {
     });
   };
 
+  const handleCopyToClipboard = () => {
+    const layout = getExportData();
+    navigator.clipboard.writeText(JSON.stringify(layout, null, 2));
+    
+    toast({
+      title: "Layout copied to clipboard",
+      description: "The layout JSON has been copied to your clipboard",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-editor-bg text-white">
       <div className="p-4 border-b border-editor-grid">
@@ -44,6 +54,14 @@ const Index = () => {
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Container
+            </Button>
+            <Button
+              variant="outline"
+              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+              onClick={handleCopyToClipboard}
+            >
+              <Clipboard className="h-4 w-4 mr-2" />
+              Copy to Clipboard
             </Button>
             <Button
               variant="outline"

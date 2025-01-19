@@ -63,6 +63,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     const x = position.x - position.width / 2;
     const y = position.y - position.height / 2;
     const isSelected = selectedId === container.id;
+    const hasParent = !!container.parentId;
     
     return (
       <Group key={container.id}>
@@ -73,10 +74,11 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           y={y}
           width={position.width}
           height={position.height}
-          fill={isSelected ? '#bb9af7' : '#7aa2f7'}
+          fill={hasParent ? '#bb9af7' : '#7aa2f7'}
           opacity={0.3}
-          stroke={isSelected ? '#bb9af7' : '#7aa2f7'}
-          strokeWidth={container.parentId ? 2 : 1}
+          stroke={isSelected ? '#bb9af7' : (hasParent ? '#bb9af7' : '#7aa2f7')}
+          strokeWidth={hasParent ? 2 : 1}
+          dash={hasParent ? [5, 5] : undefined}
           draggable
           onClick={() => setSelectedId(container.id)}
           onDragMove={(e) => handleDragMove(e, container.id)}

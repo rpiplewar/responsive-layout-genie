@@ -28,7 +28,7 @@ interface LayoutState {
   setSelectedDevice: (device: string) => void;
   updateContainerName: (id: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
-  getExportData: () => Record<'PORTRAIT' | 'LANDSCAPE', Record<string, { x: number; y: number; width: number; height: number }>>;
+  getExportData: () => any;
 }
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
@@ -37,20 +37,23 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   selectedDevice: 'iPhone SE',
 
   addContainer: (parentId?: string) => {
+    const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
+    const parentPos = parent ? (parent.portrait) : null;
+    
     const newContainer: Container = {
       id: crypto.randomUUID(),
       name: `Container ${Date.now()}`,
       portrait: {
-        x: 50,
-        y: 50,
-        width: 100,
-        height: 100,
+        x: parentPos ? parentPos.width / 2 : 50,
+        y: parentPos ? parentPos.height / 2 : 50,
+        width: parentPos ? parentPos.width * 0.5 : 100,
+        height: parentPos ? parentPos.height * 0.5 : 100,
       },
       landscape: {
-        x: 50,
-        y: 50,
-        width: 100,
-        height: 100,
+        x: parentPos ? parentPos.width / 2 : 50,
+        y: parentPos ? parentPos.height / 2 : 50,
+        width: parentPos ? parentPos.width * 0.5 : 100,
+        height: parentPos ? parentPos.height * 0.5 : 100,
       },
       parentId,
     };
@@ -107,28 +110,43 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const { containers, selectedDevice } = get();
     const device = devices[selectedDevice];
 
-    const processContainer = (container: Container, orientation: 'portrait' | 'landscape') => {
-      const position = container[orientation];
-      const dimensionX = orientation === 'portrait' ? device.width : device.height;
-      const dimensionY = orientation === 'portrait' ? device.height : device.width;
-
-      return {
-        x: position.x / dimensionX,
-        y: position.y / dimensionY,
-        width: position.width / dimensionX,
-        height: position.height / dimensionY,
+    const processContainer = (container: Container): any => {
+      const result: any = {
+        portrait: {
+          x: container.portrait.x / device.width,
+          y: container.portrait.y / device.height,
+          width: container.portrait.width / device.width,
+          height: container.portrait.height / device.height,
+        },
+        landscape: {
+          x: container.landscape.x / device.height,
+          y: container.landscape.y / device.width,
+          width: container.landscape.width / device.height,
+          height: container.landscape.height / device.width,
+        }
       };
+
+      const children = containers
+        .filter(c => c.parentId === container.id)
+        .reduce((acc, child) => ({
+          ...acc,
+          [child.name]: processContainer(child)
+        }), {});
+
+      if (Object.keys(children).length > 0) {
+        result.children = children;
+      }
+
+      return result;
     };
 
     return {
-      PORTRAIT: containers.reduce((acc, container) => ({
-        ...acc,
-        [container.name]: processContainer(container, 'portrait'),
-      }), {}),
-      LANDSCAPE: containers.reduce((acc, container) => ({
-        ...acc,
-        [container.name]: processContainer(container, 'landscape'),
-      }), {}),
+      containers: containers
+        .filter(c => !c.parentId)
+        .reduce((acc, container) => ({
+          ...acc,
+          [container.name]: processContainer(container)
+        }), {})
     };
   },
 }));
