@@ -1,5 +1,5 @@
 import { Stage, Layer, Rect, Group, Transformer } from 'react-konva';
-import { useLayoutStore } from '../store/layoutStore';
+import { useLayoutStore, Container } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef } from 'react';
 import { devices } from '../config/devices';

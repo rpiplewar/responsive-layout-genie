@@ -9,6 +9,10 @@ const Index = () => {
   const { addContainer, getExportData } = useLayoutStore();
   const { toast } = useToast();
 
+  const handleAddContainer = () => {
+    addContainer();
+  };
+
   const handleExport = () => {
     const layout = getExportData();
     const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
@@ -36,7 +40,7 @@ const Index = () => {
             <Button
               variant="outline"
               className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={addContainer}
+              onClick={handleAddContainer}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Container
