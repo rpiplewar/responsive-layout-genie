@@ -357,6 +357,8 @@ export const PropertiesPanel = () => {
 
             {selectedAsset && (
               <div className="space-y-4">
+
+              <div className="space-y-4">
                 <h4 className="font-medium text-white">Asset Properties</h4>
                 
                 <div className="space-y-2">
@@ -541,3 +543,4 @@ export const PropertiesPanel = () => {
     </div>
   );
 };
+
