@@ -269,3 +269,10 @@ The project follows a standard React application structure:
 2. Monitor Konva events through the browser console
 3. Verify coordinate transformations using the grid overlay
 4. Test responsive behavior with different device configurations
+
+## To Do
+1. Assets need keys on upload (no need to rename again)
+2. Allow uploading of videos as well
+3. Allow setting asset origin
+4. Allow setting position relative to another asset, make it work
+5. When changing device, it should work based on percentages

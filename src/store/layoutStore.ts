@@ -299,7 +299,13 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       };
 
       if (Object.keys(container.assets).length > 0) {
-        result.assets = container.assets;
+        result.assets = Object.entries(container.assets).reduce((acc, [id, asset]) => ({
+          ...acc,
+          [id]: {
+            ...asset,
+            name: asset.key
+          }
+        }), {});
       }
 
       const children = containers
@@ -437,7 +443,13 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             height: container.landscape.height * selectedDevice.width,
           },
           parentId,
-          assets: container.assets || {},
+          assets: container.assets ? Object.entries(container.assets).reduce((acc, [id, asset]) => ({
+            ...acc,
+            [id]: {
+              ...asset,
+              key: asset.name
+            }
+          }), {}) : {},
         };
 
         const children = container.children
@@ -456,9 +468,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         ...Object.values(config.containers).reduce((acc, container) => {
           if (container.assets) {
             Object.values(container.assets).forEach(asset => {
-              if (asset.key) {
-                acc[asset.key] = {
-                  id: asset.key,
+              if (asset.name) {
+                acc[asset.name] = {
+                  id: asset.name,
                   name: asset.name,
                   type: 'image',
                   size: 0, // Will be updated when image is uploaded
@@ -481,8 +493,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         ...Object.values(config.containers).reduce((acc, container) => {
           if (container.assets) {
             Object.values(container.assets).forEach(asset => {
-              if (asset.key && !state.uploadedImages[asset.key]) {
-                acc[asset.key] = ''; // Placeholder until the actual image is uploaded
+              if (asset.name && !state.uploadedImages[asset.name]) {
+                acc[asset.name] = ''; // Placeholder until the actual image is uploaded
               }
             });
           }

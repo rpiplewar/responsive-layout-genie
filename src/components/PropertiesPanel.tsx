@@ -497,34 +497,22 @@ export const PropertiesPanel = () => {
                 <h4 className="font-medium text-white">Asset Properties</h4>
                 
                 <div className="space-y-2">
-                  <Label className="text-gray-400">Select Image</Label>
-                  <div className="space-y-2">
-                    <Select
-                      value={selectedAsset.key}
-                      onValueChange={(value) => updateAssetKey(selectedId!, selectedAssetId!, value)}
-                    >
-                      <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
-                        <SelectValue placeholder="Choose an image" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(assetMetadata).map(([id, metadata]) => (
-                          <SelectItem key={id} value={id}>
-                            {metadata.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <div className="flex items-center space-x-2">
-                      <span className="text-gray-400">or</span>
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="bg-editor-grid text-white border-editor-grid"
-                      />
-                    </div>
-                  </div>
+                  <Label className="text-gray-400">Select Asset</Label>
+                  <Select
+                    value={selectedAsset.key}
+                    onValueChange={(value) => updateAssetKey(selectedId!, selectedAssetId!, value)}
+                  >
+                    <SelectTrigger className="bg-editor-grid text-white border-editor-grid">
+                      <SelectValue placeholder="Choose an asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(assetMetadata).map(([id, metadata]) => (
+                        <SelectItem key={id} value={id}>
+                          {id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-4">
