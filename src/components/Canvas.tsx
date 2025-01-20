@@ -1,9 +1,30 @@
 import { Stage, Layer, Rect, Group, Transformer, Image } from 'react-konva';
-import { useLayoutStore, Container } from '../store/layoutStore';
+import { useLayoutStore, Container, Asset } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { devices } from '../config/devices';
 import useImage from 'use-image';
+
+// Component to load a single image
+const ImageLoader = ({ 
+  id, 
+  src, 
+  onLoad 
+}: { 
+  id: string; 
+  src: string; 
+  onLoad: (id: string, image: HTMLImageElement) => void;
+}) => {
+  const [image] = useImage(src || '');
+  
+  useEffect(() => {
+    if (image) {
+      onLoad(id, image);
+    }
+  }, [id, image, onLoad]);
+  
+  return null;
+};
 
 interface CanvasProps {
   orientation: 'portrait' | 'landscape';
@@ -16,16 +37,38 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     containers, 
     selectedId, 
     updateContainer, 
+    updateAsset,
     setSelectedId, 
     selectedDevice,
     uploadedImages 
   } = useLayoutStore();
+  
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
+  const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
 
   const device = devices[selectedDevice];
   const width = orientation === 'portrait' ? device.width : device.height;
   const height = orientation === 'portrait' ? device.height : device.width;
+
+  // Create a map of all images used in containers
+  const imageIds = useMemo(() => {
+    const ids = new Set<string>();
+    containers.forEach(container => {
+      Object.values(container.assets).forEach(asset => {
+        if (asset.key) {
+          ids.add(asset.key);
+        }
+      });
+    });
+    return Array.from(ids);
+  }, [containers]);
+
+  const handleImageLoad = useMemo(() => {
+    return (id: string, image: HTMLImageElement) => {
+      imageElementsRef.current[id] = image;
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedId && transformerRef.current && selectedShapeRef.current) {
@@ -66,13 +109,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     }, orientation);
   };
 
-  const renderAsset = (containerId: string, asset: any) => {
-    const [image] = useImage(uploadedImages[asset.id]);
+  const renderAsset = (containerId: string, asset: Asset) => {
     const container = containers.find(c => c.id === containerId);
-    if (!container || !image) return null;
+    if (!container || !asset.key || !imageElementsRef.current[asset.key]) return null;
 
     const transform = asset[orientation];
     const containerPos = container[orientation];
+    const image = imageElementsRef.current[asset.key];
     
     let x = containerPos.x - containerPos.width / 2;
     let y = containerPos.y - containerPos.height / 2;
@@ -89,17 +132,61 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       }
     }
 
+    let width = transform.size.width * containerPos.width;
+    let height = transform.size.height * containerPos.height;
+
+    if (transform.maintainAspectRatio && image) {
+      const imageAspectRatio = image.width / image.height;
+      const containerAspectRatio = width / height;
+
+      if (transform.scaleMode === 'fit') {
+        if (containerAspectRatio > imageAspectRatio) {
+          // Container is wider than image
+          width = height * imageAspectRatio;
+        } else {
+          // Container is taller than image
+          height = width / imageAspectRatio;
+        }
+      } else if (transform.scaleMode === 'fill') {
+        if (containerAspectRatio > imageAspectRatio) {
+          // Container is wider than image
+          height = width / imageAspectRatio;
+        } else {
+          // Container is taller than image
+          width = height * imageAspectRatio;
+        }
+      }
+    }
+
     return (
       <Image
         key={asset.id}
         image={image}
         x={x}
         y={y}
-        width={transform.size.width * containerPos.width}
-        height={transform.size.height * containerPos.height}
-        offsetX={transform.origin.x * transform.size.width * containerPos.width}
-        offsetY={transform.origin.y * transform.size.height * containerPos.height}
+        width={width}
+        height={height}
+        offsetX={transform.origin.x * width}
+        offsetY={transform.origin.y * height}
         rotation={transform.rotation}
+        draggable
+        onDragMove={(e) => {
+          const node = e.target;
+          const containerX = containerPos.x - containerPos.width / 2;
+          const containerY = containerPos.y - containerPos.height / 2;
+          const newX = (node.x() - containerX) / containerPos.width;
+          const newY = (node.y() - containerY) / containerPos.height;
+          
+          const updates = {
+            ...transform,
+            position: {
+              ...transform.position,
+              x: newX,
+              y: newY
+            }
+          };
+          updateAsset(containerId, asset.id, updates, orientation);
+        }}
       />
     );
   };
@@ -126,17 +213,32 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           strokeWidth={hasParent ? 2 : 1}
           dash={hasParent ? [5, 5] : undefined}
           draggable
-          onClick={() => setSelectedId(container.id)}
+          onClick={(e) => {
+            e.cancelBubble = true;
+            setSelectedId(container.id);
+          }}
           onDragMove={(e) => handleDragMove(e, container.id)}
           onTransform={(e) => handleTransform(e, container.id)}
         />
-        {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
+        <Group onClick={(e) => e.cancelBubble = true}>
+          {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
+        </Group>
       </Group>
     );
   };
 
   return (
     <div className="relative">
+      {/* Load all images */}
+      {imageIds.map(id => (
+        <ImageLoader
+          key={id}
+          id={id}
+          src={uploadedImages[id] || ''}
+          onLoad={handleImageLoad}
+        />
+      ))}
+      
       <div className="absolute inset-0 rounded-lg overflow-hidden border-2 border-editor-grid" style={{
         width: width + 44,
         height: height + 88,

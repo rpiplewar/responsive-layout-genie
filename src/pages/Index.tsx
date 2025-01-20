@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/components/Canvas';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
+import { AssetLibrary } from '@/components/AssetLibrary';
 import { useLayoutStore } from '../store/layoutStore';
 import { Download, Plus, Clipboard, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -95,7 +96,10 @@ const Index = () => {
             <Canvas orientation="landscape" />
           </div>
         </div>
-        <PropertiesPanel />
+        <div className="flex">
+          <PropertiesPanel />
+          <AssetLibrary />
+        </div>
       </div>
     </div>
   );

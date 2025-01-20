@@ -1,69 +1,271 @@
-# Welcome to your Lovable project
+# Phaser Layout Tool - Technical Documentation
 
-## Project info
+## Project Overview
 
-**URL**: https://lovable.dev/projects/0cf27c1d-d087-4a24-8d0a-681763048e07
+The Phaser Layout Tool is a React-based web application that helps developers design responsive layouts for games or applications that need to work in both portrait and landscape orientations. It's particularly focused on mobile device layouts, allowing developers to create and configure containers and assets that adapt to different screen orientations.
 
-## How can I edit this code?
+## Core Technologies
 
-There are several ways of editing your application.
+- **React**: Frontend framework
+- **TypeScript**: Programming language
+- **Vite**: Build tool and development server
+- **Zustand**: State management
+- **shadcn/ui**: UI component library
+- **Tailwind CSS**: Utility-first CSS framework
+- **Konva**: Canvas-based drawing library for interactive elements
 
-**Use Lovable**
+## Key Components Breakdown
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0cf27c1d-d087-4a24-8d0a-681763048e07) and start prompting.
+### 1. State Management (src/store/layoutStore.ts)
 
-Changes made via Lovable will be committed automatically to this repo.
+The application uses Zustand for state management, defined in `layoutStore.ts`. The store manages:
 
-**Use your preferred IDE**
+- Containers (rectangular regions that can hold assets)
+- Assets (images or other content within containers)
+- Selection state (currently selected container/asset)
+- Device settings
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Key interfaces:
+```typescript
+interface Container {
+  id: string;
+  name: string;
+  portrait: ContainerPosition;  // Position and size in portrait mode
+  landscape: ContainerPosition; // Position and size in landscape mode
+  parentId?: string;
+  assets: { [key: string]: Asset };
+}
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+interface Asset {
+  id: string;
+  name: string;
+  type: 'image';
+  key: string;
+  portrait: AssetTransform;
+  landscape: AssetTransform;
+}
 ```
 
-**Edit a file directly in GitHub**
+Main store actions:
+- `addContainer`: Creates a new container
+- `updateContainer`: Modifies container properties
+- `addAsset`: Adds an asset to a container
+- `updateAsset`: Modifies asset properties
+- `deleteContainer/deleteAsset`: Removes containers/assets
+- `getExportData`: Generates JSON output of the layout
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 2. Canvas Component (src/components/Canvas.tsx)
 
-**Use GitHub Codespaces**
+The Canvas component renders the visual editor using Konva. It handles:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- Drawing the grid background
+- Rendering containers and their assets
+- Drag and drop interactions
+- Transform operations (resize, move)
+- Different views for portrait and landscape modes
 
-## What technologies are used for this project?
+Key features:
+- Uses Konva's Stage, Layer, and Rect components
+- Implements snap-to-grid functionality
+- Handles selection and transformation of containers
+- Maintains aspect ratios and constraints
 
-This project is built with .
+### 3. Properties Panel (src/components/PropertiesPanel.tsx)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The Properties Panel provides the UI for editing selected container or asset properties:
 
-## How can I deploy this project?
+- Container/asset naming
+- Position and size inputs
+- Asset-specific properties (scale, rotation, etc.)
+- Parent-child relationship management
+- Device selection
 
-Simply open [Lovable](https://lovable.dev/projects/0cf27c1d-d087-4a24-8d0a-681763048e07) and click on Share -> Publish.
+### 4. Main Page (src/pages/Index.tsx)
 
-## I want to use a custom domain - is that possible?
+The main page component orchestrates the application layout:
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+- Toolbar with actions (Add Container, Export, Copy)
+- Split view showing both portrait and landscape modes
+- Properties panel integration
+
+### 5. Device Configuration (src/config/devices.ts)
+
+Defines supported device dimensions and configurations:
+```typescript
+export const devices = {
+  'iPhone SE': {
+    width: 375,
+    height: 667,
+  },
+  'iPhone 14': {
+    width: 390,
+    height: 844,
+  }
+};
+```
+
+## Key Features
+
+1. **Responsive Layout Design**
+   - Simultaneous portrait/landscape editing
+   - Percentage-based positioning
+   - Parent-child container relationships
+
+2. **Asset Management**
+   - Image upload and positioning
+   - Transform controls (scale, rotate)
+   - Reference point system
+
+3. **Export Capabilities**
+   - JSON export of layout configuration
+   - Clipboard copy functionality
+   - Normalized coordinate system (0-1 range)
+
+## UI Components
+
+The project uses shadcn/ui components extensively:
+
+- Button, Input, Select for basic controls
+- Toast for notifications
+- Dialog for modals
+- Dropdown for menus
+
+## Development Workflow
+
+1. **State Updates**
+   ```typescript
+   // Example of updating a container
+   updateContainer(id, {
+     x: newX,
+     y: newY,
+     width: newWidth,
+     height: newHeight
+   }, orientation);
+   ```
+
+2. **Canvas Rendering**
+   ```typescript
+   // Example of container rendering
+   <Rect
+     x={x}
+     y={y}
+     width={width}
+     height={height}
+     draggable
+     onDragMove={handleDragMove}
+     onTransform={handleTransform}
+   />
+   ```
+
+3. **Export Format**
+   ```json
+   {
+     "containers": {
+       "containerName": {
+         "portrait": {
+           "x": 0.5,
+           "y": 0.3,
+           "width": 0.8,
+           "height": 0.4
+         },
+         "landscape": {
+           "x": 0.3,
+           "y": 0.5,
+           "width": 0.4,
+           "height": 0.8
+         }
+       }
+     }
+   }
+   ```
+
+## Tips for Development
+
+1. **State Management**
+   - Always use store actions for state modifications
+   - Keep transformations and calculations in the store
+   - Use the `getContainerPath` helper for hierarchy operations
+
+2. **UI Updates**
+   - Coordinate updates between Canvas and Properties Panel
+   - Use percentage values for device-independent layouts
+   - Handle both portrait and landscape modes simultaneously
+
+3. **Asset Handling**
+   - Support different scale modes (fit, fill, stretch)
+   - Maintain aspect ratios when specified
+   - Handle image loading and error states
+
+4. **Performance Considerations**
+   - Optimize canvas redraws
+   - Debounce frequent updates
+   - Use memoization for complex calculations
+
+## Common Patterns
+
+1. **Container Updates**
+```typescript
+const handleDragMove = (e: KonvaEventObject<DragEvent>) => {
+  const node = e.target;
+  updateContainer(id, {
+    x: node.x() + node.width() / 2,
+    y: node.y() + node.height() / 2,
+  }, orientation);
+};
+```
+
+2. **Asset References**
+```typescript
+const renderAsset = (containerId: string, asset: Asset) => {
+  const container = containers.find(c => c.id === containerId);
+  const transform = asset[orientation];
+  // Calculate position based on reference point
+  const x = calculateAssetPosition(container, transform);
+  return <Image x={x} y={y} />;
+};
+```
+
+3. **Export Transformations**
+```typescript
+const processContainer = (container: Container) => {
+  return {
+    portrait: normalizeCoordinates(container.portrait, device),
+    landscape: normalizeCoordinates(container.landscape, device),
+    assets: processAssets(container.assets)
+  };
+};
+```
+
+## File Organization
+
+The project follows a standard React application structure:
+- `/src/components`: UI components
+- `/src/store`: State management
+- `/src/hooks`: Custom React hooks
+- `/src/config`: Configuration files
+- `/src/pages`: Page components
+- `/src/lib`: Utility functions
+
+## Extension Points
+
+1. **New Container Types**
+   - Extend the Container interface
+   - Add new rendering logic in Canvas
+   - Update the Properties Panel
+
+2. **Additional Asset Types**
+   - Add new asset type definitions
+   - Implement specific transform handlers
+   - Create dedicated property editors
+
+3. **Export Formats**
+   - Add new export transformations
+   - Implement different serialization formats
+   - Support various platform targets
+
+## Testing and Debugging
+
+1. Use the React Developer Tools to inspect component state
+2. Monitor Konva events through the browser console
+3. Verify coordinate transformations using the grid overlay
+4. Test responsive behavior with different device configurations

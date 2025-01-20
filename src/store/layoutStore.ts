@@ -46,12 +46,25 @@ export interface Container {
   assets: { [key: string]: Asset };
 }
 
+export interface AssetMetadata {
+  id: string;
+  name: string;
+  type: 'image';
+  size: number;
+  dimensions?: {
+    width: number;
+    height: number;
+  };
+  dateUploaded: number;
+}
+
 interface LayoutState {
   containers: Container[];
   selectedId: string | null;
   selectedAssetId: string | null;
   selectedDevice: string;
-  uploadedImages: { [key: string]: string }; // Add this new property
+  uploadedImages: { [key: string]: string };
+  assetMetadata: { [key: string]: AssetMetadata };
   addContainer: (parentId?: string) => void;
   addAsset: (containerId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
@@ -65,7 +78,18 @@ interface LayoutState {
   updateAssetName: (containerId: string, assetId: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
   getExportData: () => any;
-  uploadImage: (assetId: string, file: File) => void; // Add this new method
+  uploadImage: (assetId: string, file: File) => void;
+  deleteAssetFromLibrary: (assetId: string) => void;
+  updateAssetMetadata: (assetId: string, updates: Partial<AssetMetadata>) => void;
+  updateAssetKey: (containerId: string, assetId: string, key: string) => void;
+  importConfig: (config: { containers: { [key: string]: NestedContainer }; assets: { [key: string]: AssetMetadata } }) => void;
+}
+
+interface NestedContainer {
+  portrait: ContainerPosition;
+  landscape: ContainerPosition;
+  assets?: { [key: string]: Asset };
+  children?: { [key: string]: NestedContainer };
 }
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
@@ -74,6 +98,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   selectedAssetId: null,
   selectedDevice: 'iPhone SE',
   uploadedImages: {},
+  assetMetadata: {},
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
@@ -251,63 +276,190 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   getExportData: () => {
-    const { containers } = get();
-    const device = devices[get().selectedDevice];
-
-    const processContainer = (container: Container): any => {
-      const result: any = {
-        portrait: {
-          x: container.portrait.x / device.width,
-          y: container.portrait.y / device.height,
-          width: container.portrait.width / device.width,
-          height: container.portrait.height / device.height,
-        },
-        landscape: {
-          x: container.landscape.x / device.height,
-          y: container.landscape.y / device.width,
-          width: container.landscape.width / device.height,
-          height: container.landscape.height / device.width,
-        },
-      };
-
-      if (Object.keys(container.assets).length > 0) {
-        result.assets = container.assets;
-      }
-
-      const children = containers
-        .filter(c => c.parentId === container.id)
-        .reduce((acc, child) => ({
-          ...acc,
-          [child.name]: processContainer(child)
-        }), {});
-
-      if (Object.keys(children).length > 0) {
-        result.children = children;
-      }
-
-      return result;
+    const { containers, assetMetadata } = get();
+    
+    // Convert flat container list to nested structure
+    const buildNestedContainers = (parentId?: string): { [key: string]: NestedContainer } => {
+      const childContainers = containers.filter(c => c.parentId === parentId);
+      return childContainers.reduce((acc, container) => {
+        acc[container.name] = {
+          portrait: container.portrait,
+          landscape: container.landscape,
+          assets: container.assets,
+          children: buildNestedContainers(container.id)
+        };
+        return acc;
+      }, {} as { [key: string]: NestedContainer });
     };
 
     return {
-      containers: containers
-        .filter(c => !c.parentId)
-        .reduce((acc, container) => ({
-          ...acc,
-          [container.name]: processContainer(container)
-        }), {})
+      containers: buildNestedContainers(undefined),
+      assets: assetMetadata
     };
   },
 
   uploadImage: (assetId: string, file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      set((state) => ({
-        uploadedImages: {
-          ...state.uploadedImages,
-          [assetId]: e.target?.result as string
-        }
-      }));
+      const dataUrl = e.target?.result as string;
+      
+      // Create image element to get dimensions
+      const img = new Image();
+      img.onload = () => {
+        set((state) => ({
+          uploadedImages: {
+            ...state.uploadedImages,
+            [assetId]: dataUrl
+          },
+          assetMetadata: {
+            ...state.assetMetadata,
+            [assetId]: {
+              id: assetId,
+              name: file.name,
+              type: 'image',
+              size: file.size,
+              dimensions: {
+                width: img.width,
+                height: img.height
+              },
+              dateUploaded: Date.now()
+            }
+          }
+        }));
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+  },
+
+  deleteAssetFromLibrary: (assetId: string) => {
+    set((state) => {
+      const { [assetId]: _, ...remainingImages } = state.uploadedImages;
+      const { [assetId]: __, ...remainingMetadata } = state.assetMetadata;
+      
+      // Also remove the asset from any containers that use it
+      const updatedContainers = state.containers.map(container => ({
+        ...container,
+        assets: Object.fromEntries(
+          Object.entries(container.assets)
+            .filter(([_, asset]) => asset.key !== assetId)
+        )
+      }));
+
+      return {
+        uploadedImages: remainingImages,
+        assetMetadata: remainingMetadata,
+        containers: updatedContainers
+      };
+    });
+  },
+
+  updateAssetMetadata: (assetId: string, updates: Partial<AssetMetadata>) => {
+    set((state) => ({
+      assetMetadata: {
+        ...state.assetMetadata,
+        [assetId]: {
+          ...state.assetMetadata[assetId],
+          ...updates
+        }
+      }
+    }));
+  },
+
+  updateAssetKey: (containerId: string, assetId: string, key: string) => {
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? {
+              ...c,
+              assets: {
+                ...c.assets,
+                [assetId]: {
+                  ...c.assets[assetId],
+                  key
+                },
+              },
+            }
+          : c
+      ),
+    }));
+  },
+
+  importConfig: (config) => {
+    const flattenContainers = (
+      containers: { [key: string]: NestedContainer },
+      parentId?: string
+    ): Container[] => {
+      return Object.entries(containers).flatMap(([name, container]) => {
+        const id = crypto.randomUUID();
+        const flatContainer: Container = {
+          id,
+          name,
+          portrait: {
+            x: container.portrait.x * devices['iPhone SE'].width,
+            y: container.portrait.y * devices['iPhone SE'].height,
+            width: container.portrait.width * devices['iPhone SE'].width,
+            height: container.portrait.height * devices['iPhone SE'].height,
+          },
+          landscape: {
+            x: container.landscape.x * devices['iPhone SE'].height,
+            y: container.landscape.y * devices['iPhone SE'].width,
+            width: container.landscape.width * devices['iPhone SE'].height,
+            height: container.landscape.height * devices['iPhone SE'].width,
+          },
+          parentId,
+          assets: container.assets || {},
+        };
+
+        const children = container.children
+          ? flattenContainers(container.children, id)
+          : [];
+
+        return [flatContainer, ...children];
+      });
+    };
+
+    // First, update the containers and metadata
+    set((state) => ({
+      containers: flattenContainers(config.containers),
+      assetMetadata: {
+        ...state.assetMetadata,
+        ...Object.values(config.containers).reduce((acc, container) => {
+          if (container.assets) {
+            Object.values(container.assets).forEach(asset => {
+              if (asset.key) {
+                acc[asset.key] = {
+                  id: asset.key,
+                  name: asset.name,
+                  type: 'image',
+                  size: 0, // Will be updated when image is uploaded
+                  dateUploaded: Date.now(),
+                };
+              }
+            });
+          }
+          return acc;
+        }, {} as { [key: string]: AssetMetadata }),
+      },
+      selectedId: null,
+      selectedAssetId: null,
+    }));
+
+    // Then, initialize uploadedImages with placeholder data
+    set((state) => ({
+      uploadedImages: {
+        ...state.uploadedImages,
+        ...Object.values(config.containers).reduce((acc, container) => {
+          if (container.assets) {
+            Object.values(container.assets).forEach(asset => {
+              if (asset.key && !state.uploadedImages[asset.key]) {
+                acc[asset.key] = ''; // Placeholder until the actual image is uploaded
+              }
+            });
+          }
+          return acc;
+        }, {} as { [key: string]: string })
+      }
+    }));
   },
 }));
