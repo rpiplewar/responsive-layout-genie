@@ -58,51 +58,6 @@ export const PropertiesPanel = () => {
     uploadedImages,
   } = useLayoutStore();
 
-  const handleExportLayout = async () => {
-    const config = getExportData();
-    const zip = new JSZip();
-
-    try {
-      // Add layout.json to zip
-      zip.file('layout.json', JSON.stringify(config, null, 2));
-
-      // Create assets folder in zip
-      const assetsFolder = zip.folder('assets');
-      if (!assetsFolder) throw new Error('Failed to create assets folder');
-
-      // Add all images to the assets folder
-      const imagePromises = Object.entries(uploadedImages).map(async ([assetId, dataUrl]) => {
-        if (!dataUrl) return;
-        
-        try {
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          assetsFolder.file(`${assetId}.png`, blob);
-        } catch (error) {
-          console.error(`Failed to add image ${assetId}:`, error);
-        }
-      });
-
-      await Promise.all(imagePromises);
-
-      // Generate and download the zip file
-      const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, 'layout-export.zip');
-
-      toast({
-        title: "Layout exported",
-        description: "Layout configuration and assets have been exported to layout-export.zip",
-      });
-    } catch (error) {
-      console.error('Export error:', error);
-      toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export layout",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -214,15 +169,6 @@ export const PropertiesPanel = () => {
                 onChange={handleImportConfig}
               />
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={handleExportLayout}
-            >
-              Export Layout
-            </Button>
           </div>
 
           <p className="text-gray-400">No container selected</p>

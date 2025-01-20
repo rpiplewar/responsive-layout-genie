@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { devices } from '../config/devices';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 export interface Position {
   x: number;
@@ -83,6 +85,7 @@ interface LayoutState {
   updateAssetMetadata: (assetId: string, updates: Partial<AssetMetadata>) => void;
   updateAssetKey: (containerId: string, assetId: string, key: string) => void;
   importConfig: (config: { containers: { [key: string]: NestedContainer }; assets: { [key: string]: AssetMetadata } }) => void;
+  exportLayout: () => Promise<void>;
 }
 
 interface NestedContainer {
@@ -276,25 +279,50 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   getExportData: () => {
-    const { containers, assetMetadata } = get();
-    
-    // Convert flat container list to nested structure
-    const buildNestedContainers = (parentId?: string): { [key: string]: NestedContainer } => {
-      const childContainers = containers.filter(c => c.parentId === parentId);
-      return childContainers.reduce((acc, container) => {
-        acc[container.name] = {
-          portrait: container.portrait,
-          landscape: container.landscape,
-          assets: container.assets,
-          children: buildNestedContainers(container.id)
-        };
-        return acc;
-      }, {} as { [key: string]: NestedContainer });
+    const { containers } = get();
+    const device = devices[get().selectedDevice];
+
+    const processContainer = (container: Container): any => {
+      const result: any = {
+        portrait: {
+          x: container.portrait.x / device.width,
+          y: container.portrait.y / device.height,
+          width: container.portrait.width / device.width,
+          height: container.portrait.height / device.height,
+        },
+        landscape: {
+          x: container.landscape.x / device.height,
+          y: container.landscape.y / device.width,
+          width: container.landscape.width / device.height,
+          height: container.landscape.height / device.width,
+        },
+      };
+
+      if (Object.keys(container.assets).length > 0) {
+        result.assets = container.assets;
+      }
+
+      const children = containers
+        .filter(c => c.parentId === container.id)
+        .reduce((acc, child) => ({
+          ...acc,
+          [child.name]: processContainer(child)
+        }), {});
+
+      if (Object.keys(children).length > 0) {
+        result.children = children;
+      }
+
+      return result;
     };
 
     return {
-      containers: buildNestedContainers(undefined),
-      assets: assetMetadata
+      containers: containers
+        .filter(c => !c.parentId)
+        .reduce((acc, container) => ({
+          ...acc,
+          [container.name]: processContainer(container)
+        }), {})
     };
   },
 
@@ -390,22 +418,23 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       containers: { [key: string]: NestedContainer },
       parentId?: string
     ): Container[] => {
+      const selectedDevice = devices[get().selectedDevice];
       return Object.entries(containers).flatMap(([name, container]) => {
         const id = crypto.randomUUID();
         const flatContainer: Container = {
           id,
           name,
           portrait: {
-            x: container.portrait.x * devices['iPhone SE'].width,
-            y: container.portrait.y * devices['iPhone SE'].height,
-            width: container.portrait.width * devices['iPhone SE'].width,
-            height: container.portrait.height * devices['iPhone SE'].height,
+            x: container.portrait.x * selectedDevice.width,
+            y: container.portrait.y * selectedDevice.height,
+            width: container.portrait.width * selectedDevice.width,
+            height: container.portrait.height * selectedDevice.height,
           },
           landscape: {
-            x: container.landscape.x * devices['iPhone SE'].height,
-            y: container.landscape.y * devices['iPhone SE'].width,
-            width: container.landscape.width * devices['iPhone SE'].height,
-            height: container.landscape.height * devices['iPhone SE'].width,
+            x: container.landscape.x * selectedDevice.height,
+            y: container.landscape.y * selectedDevice.width,
+            width: container.landscape.width * selectedDevice.height,
+            height: container.landscape.height * selectedDevice.width,
           },
           parentId,
           assets: container.assets || {},
@@ -462,4 +491,37 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       }
     }));
   },
+  
+  exportLayout: async () => {
+    const { getExportData, uploadedImages } = get();
+    const config = getExportData();
+    const zip = new JSZip();
+
+    try {
+      zip.file('layout.json', JSON.stringify(config, null, 2));
+
+      const assetsFolder = zip.folder('assets');
+      if (!assetsFolder) throw new Error('Failed to create assets folder');
+
+      const imagePromises = Object.entries(uploadedImages).map(async ([assetId, dataUrl]) => {
+        if (!dataUrl) return;
+        
+        try {
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          assetsFolder.file(`${assetId}.png`, blob);
+        } catch (error) {
+          console.error(`Failed to add image ${assetId}:`, error);
+        }
+      });
+
+      await Promise.all(imagePromises);
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, 'layout-export.zip');
+    } catch (error) {
+      console.error('Export error:', error);
+      throw error;
+    }
+  }
 }));

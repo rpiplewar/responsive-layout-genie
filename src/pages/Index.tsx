@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 
 const Index = () => {
-  const { addContainer, getExportData } = useLayoutStore();
+  const { addContainer, getExportData, exportLayout } = useLayoutStore();
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
 
@@ -16,22 +16,8 @@ const Index = () => {
     addContainer();
   };
 
-  const handleExport = () => {
-    const layout = getExportData();
-    const blob = new Blob([JSON.stringify(layout, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'layout.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    toast({
-      title: "Layout exported successfully",
-      description: "Your layout has been downloaded as layout.json",
-    });
+  const handleExport = async () => {
+    exportLayout();
   };
 
   const handleCopyToClipboard = async () => {
@@ -86,12 +72,12 @@ const Index = () => {
       </div>
 
       <div className="flex gap-4 p-4">
-        <div className="flex-1 space-x-4 flex">
-          <div className="flex-1">
+        <div className="flex space-x-1">
+          <div className="w-[450px]">
             <h2 className="text-lg font-semibold mb-2">Portrait Mode</h2>
             <Canvas orientation="portrait" />
           </div>
-          <div className="flex-1">
+          <div className="w-[700px]">
             <h2 className="text-lg font-semibold mb-2">Landscape Mode</h2>
             <Canvas orientation="landscape" />
           </div>
