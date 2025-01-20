@@ -623,6 +623,47 @@ export const PropertiesPanel = () => {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label className="text-gray-400">Origin X</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={selectedAsset.portrait.origin.x}
+                        onChange={(e) =>
+                          handleAssetChange(
+                            'origin',
+                            {
+                              ...selectedAsset.portrait.origin,
+                              x: parseFloat(e.target.value),
+                            },
+                            'portrait'
+                          )
+                        }
+                        className="bg-editor-grid text-white border-editor-grid"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-gray-400">Origin Y</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={selectedAsset.portrait.origin.y}
+                        onChange={(e) =>
+                          handleAssetChange(
+                            'origin',
+                            {
+                              ...selectedAsset.portrait.origin,
+                              y: parseFloat(e.target.value),
+                            },
+                            'portrait'
+                          )
+                        }
+                        className="bg-editor-grid text-white border-editor-grid"
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label className="text-gray-400">Scale Mode</Label>
                     <Select
@@ -770,6 +811,47 @@ export const PropertiesPanel = () => {
                             {
                               ...selectedAsset.landscape.size,
                               height: parseFloat(e.target.value),
+                            },
+                            'landscape'
+                          )
+                        }
+                        className="bg-editor-grid text-white border-editor-grid"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label className="text-gray-400">Origin X</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={selectedAsset.landscape.origin.x}
+                        onChange={(e) =>
+                          handleAssetChange(
+                            'origin',
+                            {
+                              ...selectedAsset.landscape.origin,
+                              x: parseFloat(e.target.value),
+                            },
+                            'landscape'
+                          )
+                        }
+                        className="bg-editor-grid text-white border-editor-grid"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-gray-400">Origin Y</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={selectedAsset.landscape.origin.y}
+                        onChange={(e) =>
+                          handleAssetChange(
+                            'origin',
+                            {
+                              ...selectedAsset.landscape.origin,
+                              y: parseFloat(e.target.value),
                             },
                             'landscape'
                           )

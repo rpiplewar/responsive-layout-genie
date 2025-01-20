@@ -1,4 +1,4 @@
-import { Stage, Layer, Rect, Group, Transformer, Image } from 'react-konva';
+import { Stage, Layer, Rect, Group, Transformer, Image, Circle } from 'react-konva';
 import { useLayoutStore, Container, Asset } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useMemo } from 'react';
@@ -40,7 +40,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     updateAsset,
     setSelectedId, 
     selectedDevice,
-    uploadedImages 
+    uploadedImages,
+    selectedAssetId
   } = useLayoutStore();
   
   const transformerRef = useRef<any>(null);
@@ -117,18 +118,18 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     const containerPos = container[orientation];
     const image = imageElementsRef.current[asset.key];
     
-    let x = containerPos.x - containerPos.width / 2;
-    let y = containerPos.y - containerPos.height / 2;
+    let originX = containerPos.x - containerPos.width / 2;
+    let originY = containerPos.y - containerPos.height / 2;
     
     if (transform.position.reference === 'container') {
-      x += containerPos.width * transform.position.x;
-      y += containerPos.height * transform.position.y;
+      originX += containerPos.width * transform.position.x;
+      originY += containerPos.height * transform.position.y;
     } else {
       const refAsset = container.assets[transform.position.reference];
       if (refAsset) {
         const refTransform = refAsset[orientation];
-        x += refTransform.position.x;
-        y += refTransform.position.y;
+        originX += refTransform.position.x;
+        originY += refTransform.position.y;
       }
     }
 
@@ -158,36 +159,65 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       }
     }
 
+    const isSelected = selectedId === containerId && selectedAssetId === asset.id;
+
     return (
-      <Image
-        key={asset.id}
-        image={image}
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        offsetX={transform.origin.x * width}
-        offsetY={transform.origin.y * height}
-        rotation={transform.rotation}
-        draggable
-        onDragMove={(e) => {
-          const node = e.target;
-          const containerX = containerPos.x - containerPos.width / 2;
-          const containerY = containerPos.y - containerPos.height / 2;
-          const newX = (node.x() - containerX) / containerPos.width;
-          const newY = (node.y() - containerY) / containerPos.height;
-          
-          const updates = {
-            ...transform,
-            position: {
-              ...transform.position,
-              x: newX,
-              y: newY
-            }
-          };
-          updateAsset(containerId, asset.id, updates, orientation);
-        }}
-      />
+      <Group key={asset.id}>
+        <Image
+          image={image}
+          x={originX}
+          y={originY}
+          width={width}
+          height={height}
+          offsetX={transform.origin.x * width}
+          offsetY={transform.origin.y * height}
+          rotation={transform.rotation}
+          draggable
+          onDragMove={(e) => {
+            const node = e.target;
+            const containerX = containerPos.x - containerPos.width / 2;
+            const containerY = containerPos.y - containerPos.height / 2;
+            const newX = (node.x() - containerX) / containerPos.width;
+            const newY = (node.y() - containerY) / containerPos.height;
+            
+            const updates = {
+              ...transform,
+              position: {
+                ...transform.position,
+                x: newX,
+                y: newY
+              }
+            };
+            updateAsset(containerId, asset.id, updates, orientation);
+          }}
+        />
+        {isSelected && (
+          <Circle
+            x={originX}
+            y={originY}
+            radius={4}
+            fill="red"
+            draggable
+            onDragMove={(e) => {
+              const node = e.target;
+              const containerX = containerPos.x - containerPos.width / 2;
+              const containerY = containerPos.y - containerPos.height / 2;
+              const newX = (node.x() - containerX) / containerPos.width;
+              const newY = (node.y() - containerY) / containerPos.height;
+              
+              const updates = {
+                ...transform,
+                position: {
+                  ...transform.position,
+                  x: newX,
+                  y: newY
+                }
+              };
+              updateAsset(containerId, asset.id, updates, orientation);
+            }}
+          />
+        )}
+      </Group>
     );
   };
 
