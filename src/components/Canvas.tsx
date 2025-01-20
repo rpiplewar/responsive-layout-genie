@@ -128,8 +128,48 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       const refAsset = container.assets[transform.position.reference];
       if (refAsset) {
         const refTransform = refAsset[orientation];
-        originX += refTransform.position.x;
-        originY += refTransform.position.y;
+        const refImage = imageElementsRef.current[refAsset.key];
+        if (!refImage) return null;
+
+        // Calculate reference asset's position and size
+        let refWidth = refTransform.size.width * containerPos.width;
+        let refHeight = refTransform.size.height * containerPos.height;
+
+        if (refTransform.maintainAspectRatio) {
+          const refImageAspectRatio = refImage.width / refImage.height;
+          const refContainerAspectRatio = refWidth / refHeight;
+
+          if (refTransform.scaleMode === 'fit') {
+            if (refContainerAspectRatio > refImageAspectRatio) {
+              refWidth = refHeight * refImageAspectRatio;
+            } else {
+              refHeight = refWidth / refImageAspectRatio;
+            }
+          } else if (refTransform.scaleMode === 'fill') {
+            if (refContainerAspectRatio > refImageAspectRatio) {
+              refHeight = refWidth / refImageAspectRatio;
+            } else {
+              refWidth = refHeight * refImageAspectRatio;
+            }
+          }
+        }
+
+        // Calculate reference asset's origin point
+        let refOriginX = containerPos.x - containerPos.width / 2;
+        let refOriginY = containerPos.y - containerPos.height / 2;
+
+        if (refTransform.position.reference === 'container') {
+          refOriginX += containerPos.width * refTransform.position.x;
+          refOriginY += containerPos.height * refTransform.position.y;
+        }
+
+        // Adjust for reference asset's origin offset
+        refOriginX -= refTransform.origin.x * refWidth;
+        refOriginY -= refTransform.origin.y * refHeight;
+
+        // Position relative to reference asset's dimensions
+        originX = refOriginX + refWidth * transform.position.x;
+        originY = refOriginY + refHeight * transform.position.y;
       }
     }
 
@@ -175,31 +215,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           draggable
           onDragMove={(e) => {
             const node = e.target;
-            const containerX = containerPos.x - containerPos.width / 2;
-            const containerY = containerPos.y - containerPos.height / 2;
-            const newX = (node.x() - containerX) / containerPos.width;
-            const newY = (node.y() - containerY) / containerPos.height;
             
-            const updates = {
-              ...transform,
-              position: {
-                ...transform.position,
-                x: newX,
-                y: newY
-              }
-            };
-            updateAsset(containerId, asset.id, updates, orientation);
-          }}
-        />
-        {isSelected && (
-          <Circle
-            x={originX}
-            y={originY}
-            radius={4}
-            fill="red"
-            draggable
-            onDragMove={(e) => {
-              const node = e.target;
+            if (transform.position.reference === 'container') {
               const containerX = containerPos.x - containerPos.width / 2;
               const containerY = containerPos.y - containerPos.height / 2;
               const newX = (node.x() - containerX) / containerPos.width;
@@ -214,6 +231,149 @@ export const Canvas = ({ orientation }: CanvasProps) => {
                 }
               };
               updateAsset(containerId, asset.id, updates, orientation);
+            } else {
+              const refAsset = container.assets[transform.position.reference];
+              if (refAsset) {
+                const refTransform = refAsset[orientation];
+                const refImage = imageElementsRef.current[refAsset.key];
+                if (!refImage) return;
+
+                // Calculate reference asset's position and size
+                let refWidth = refTransform.size.width * containerPos.width;
+                let refHeight = refTransform.size.height * containerPos.height;
+
+                if (refTransform.maintainAspectRatio) {
+                  const refImageAspectRatio = refImage.width / refImage.height;
+                  const refContainerAspectRatio = refWidth / refHeight;
+
+                  if (refTransform.scaleMode === 'fit') {
+                    if (refContainerAspectRatio > refImageAspectRatio) {
+                      refWidth = refHeight * refImageAspectRatio;
+                    } else {
+                      refHeight = refWidth / refImageAspectRatio;
+                    }
+                  } else if (refTransform.scaleMode === 'fill') {
+                    if (refContainerAspectRatio > refImageAspectRatio) {
+                      refHeight = refWidth / refImageAspectRatio;
+                    } else {
+                      refWidth = refHeight * refImageAspectRatio;
+                    }
+                  }
+                }
+
+                // Calculate reference asset's origin point
+                let refOriginX = containerPos.x - containerPos.width / 2;
+                let refOriginY = containerPos.y - containerPos.height / 2;
+
+                if (refTransform.position.reference === 'container') {
+                  refOriginX += containerPos.width * refTransform.position.x;
+                  refOriginY += containerPos.height * refTransform.position.y;
+                }
+
+                // Adjust for reference asset's origin offset
+                refOriginX -= refTransform.origin.x * refWidth;
+                refOriginY -= refTransform.origin.y * refHeight;
+
+                // Calculate new position relative to reference asset
+                const newX = (node.x() - refOriginX) / refWidth;
+                const newY = (node.y() - refOriginY) / refHeight;
+
+                const updates = {
+                  ...transform,
+                  position: {
+                    ...transform.position,
+                    x: newX,
+                    y: newY
+                  }
+                };
+                updateAsset(containerId, asset.id, updates, orientation);
+              }
+            }
+          }}
+        />
+        {isSelected && (
+          <Circle
+            x={originX}
+            y={originY}
+            radius={4}
+            fill="red"
+            draggable
+            onDragMove={(e) => {
+              const node = e.target;
+              
+              if (transform.position.reference === 'container') {
+                const containerX = containerPos.x - containerPos.width / 2;
+                const containerY = containerPos.y - containerPos.height / 2;
+                const newX = (node.x() - containerX) / containerPos.width;
+                const newY = (node.y() - containerY) / containerPos.height;
+                
+                const updates = {
+                  ...transform,
+                  position: {
+                    ...transform.position,
+                    x: newX,
+                    y: newY
+                  }
+                };
+                updateAsset(containerId, asset.id, updates, orientation);
+              } else {
+                const refAsset = container.assets[transform.position.reference];
+                if (refAsset) {
+                  const refTransform = refAsset[orientation];
+                  const refImage = imageElementsRef.current[refAsset.key];
+                  if (!refImage) return;
+
+                  // Calculate reference asset's position and size
+                  let refWidth = refTransform.size.width * containerPos.width;
+                  let refHeight = refTransform.size.height * containerPos.height;
+
+                  if (refTransform.maintainAspectRatio) {
+                    const refImageAspectRatio = refImage.width / refImage.height;
+                    const refContainerAspectRatio = refWidth / refHeight;
+
+                    if (refTransform.scaleMode === 'fit') {
+                      if (refContainerAspectRatio > refImageAspectRatio) {
+                        refWidth = refHeight * refImageAspectRatio;
+                      } else {
+                        refHeight = refWidth / refImageAspectRatio;
+                      }
+                    } else if (refTransform.scaleMode === 'fill') {
+                      if (refContainerAspectRatio > refImageAspectRatio) {
+                        refHeight = refWidth / refImageAspectRatio;
+                      } else {
+                        refWidth = refHeight * refImageAspectRatio;
+                      }
+                    }
+                  }
+
+                  // Calculate reference asset's origin point
+                  let refOriginX = containerPos.x - containerPos.width / 2;
+                  let refOriginY = containerPos.y - containerPos.height / 2;
+
+                  if (refTransform.position.reference === 'container') {
+                    refOriginX += containerPos.width * refTransform.position.x;
+                    refOriginY += containerPos.height * refTransform.position.y;
+                  }
+
+                  // Adjust for reference asset's origin offset
+                  refOriginX -= refTransform.origin.x * refWidth;
+                  refOriginY -= refTransform.origin.y * refHeight;
+
+                  // Calculate new position relative to reference asset
+                  const newX = (node.x() - refOriginX) / refWidth;
+                  const newY = (node.y() - refOriginY) / refHeight;
+
+                  const updates = {
+                    ...transform,
+                    position: {
+                      ...transform.position,
+                      x: newX,
+                      y: newY
+                    }
+                  };
+                  updateAsset(containerId, asset.id, updates, orientation);
+                }
+              }
             }}
           />
         )}
