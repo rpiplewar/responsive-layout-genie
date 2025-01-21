@@ -1,9 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/components/Canvas';
+import { CanvasModal } from '@/components/CanvasModal';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { AssetLibrary } from '@/components/AssetLibrary';
 import { useLayoutStore } from '../store/layoutStore';
-import { Download, Plus, Clipboard, Check } from 'lucide-react';
+import { Download, Plus, Clipboard, Check, Maximize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 
@@ -11,6 +12,7 @@ const Index = () => {
   const { addContainer, getExportData, exportLayout } = useLayoutStore();
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
+  const [expandedView, setExpandedView] = useState<'portrait' | 'landscape' | null>(null);
 
   const handleAddContainer = () => {
     addContainer();
@@ -71,22 +73,47 @@ const Index = () => {
         </div>
       </div>
 
-      <div className="flex gap-4 p-4">
-        <div className="flex space-x-1">
-          <div className="w-[450px]">
-            <h2 className="text-lg font-semibold mb-2">Portrait Mode</h2>
-            <Canvas orientation="portrait" />
+      <div className="flex">
+        <div className="w-[450px] p-4 space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-medium">Portrait Mode</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+              onClick={() => setExpandedView('portrait')}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
           </div>
-          <div className="w-[700px]">
-            <h2 className="text-lg font-semibold mb-2">Landscape Mode</h2>
-            <Canvas orientation="landscape" />
+          <Canvas orientation="portrait" />
+        </div>
+
+        <div className="flex-1 p-4 space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-medium">Landscape Mode</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+              onClick={() => setExpandedView('landscape')}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
           </div>
+          <Canvas orientation="landscape" />
         </div>
-        <div className="flex">
-          <PropertiesPanel />
-          <AssetLibrary />
-        </div>
+
+        <PropertiesPanel />
+        <AssetLibrary />
       </div>
+
+      {expandedView && (
+        <CanvasModal 
+          orientation={expandedView} 
+          onClose={() => setExpandedView(null)} 
+        />
+      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import { Stage, Layer, Rect, Group, Transformer, Image, Circle } from 'react-konva';
 import { useLayoutStore, Container, Asset, AssetTransform } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { devices } from '../config/devices';
 import useImage from 'use-image';
 
@@ -42,13 +42,20 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     selectedDevice,
     uploadedImages,
     selectedAssetId,
-    setSelectedAssetId
+    setSelectedAssetId,
+    activeOrientation,
+    setActiveOrientation
   } = useLayoutStore();
   
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
   const selectedAssetRef = useRef<any>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
+  const isActiveCanvasRef = useRef(false);
+  const stageRef = useRef<any>(null);
+
+  // Track active canvas state for visual feedback
+  const [isActive, setIsActive] = useState(activeOrientation === orientation);
 
   const device = devices[selectedDevice];
   const width = orientation === 'portrait' ? device.width : device.height;
@@ -73,6 +80,16 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     };
   }, []);
 
+  // Force re-render when images are loaded
+  useEffect(() => {
+    const loadedImages = Object.keys(imageElementsRef.current);
+    const missingImages = imageIds.filter(id => !loadedImages.includes(id));
+    if (missingImages.length > 0) {
+      // Force re-render by updating a ref
+      imageElementsRef.current = { ...imageElementsRef.current };
+    }
+  }, [imageIds]);
+
   useEffect(() => {
     if (transformerRef.current) {
       if (selectedId && selectedShapeRef.current) {
@@ -84,6 +101,176 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       }
     }
   }, [selectedId, selectedAssetId]);
+
+  // Handle keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle keyboard events if this orientation is active
+      if (!isActive) return;
+      if (!selectedId && !selectedAssetId) return;
+      
+      console.log('Key event:', {
+        key: e.key,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        code: e.code,
+        orientation,
+        isActive
+      });
+      
+      const step = e.shiftKey ? 10 : 1;
+      const isResizing = e.altKey;
+      
+      if (selectedAssetId) {
+        // Find container that has this asset
+        const container = containers.find(c => c.assets[selectedAssetId]);
+        if (!container) return;
+        
+        const asset = container.assets[selectedAssetId];
+        const transform = asset[orientation];
+        let updates: Partial<AssetTransform> = { ...transform };
+        
+        switch (e.key) {
+          case 'ArrowLeft':
+            if (isResizing) {
+              updates.size = {
+                ...transform.size,
+                width: Math.max(0.01, transform.size.width - (step * 0.01))
+              };
+              if (e.shiftKey && transform.maintainAspectRatio) {
+                updates.size.height = updates.size.width;
+              }
+            } else {
+              updates.position = {
+                ...transform.position,
+                x: transform.position.x - (step * 0.01)
+              };
+            }
+            break;
+          case 'ArrowRight':
+            if (isResizing) {
+              updates.size = {
+                ...transform.size,
+                width: transform.size.width + (step * 0.01)
+              };
+              if (e.shiftKey && transform.maintainAspectRatio) {
+                updates.size.height = updates.size.width;
+              }
+            } else {
+              updates.position = {
+                ...transform.position,
+                x: transform.position.x + (step * 0.01)
+              };
+            }
+            break;
+          case 'ArrowUp':
+            if (isResizing) {
+              updates.size = {
+                ...transform.size,
+                height: Math.max(0.01, transform.size.height - (step * 0.01))
+              };
+              if (e.shiftKey && transform.maintainAspectRatio) {
+                updates.size.width = updates.size.height;
+              }
+            } else {
+              updates.position = {
+                ...transform.position,
+                y: transform.position.y - (step * 0.01)
+              };
+            }
+            break;
+          case 'ArrowDown':
+            if (isResizing) {
+              updates.size = {
+                ...transform.size,
+                height: transform.size.height + (step * 0.01)
+              };
+              if (e.shiftKey && transform.maintainAspectRatio) {
+                updates.size.width = updates.size.height;
+              }
+            } else {
+              updates.position = {
+                ...transform.position,
+                y: transform.position.y + (step * 0.01)
+              };
+            }
+            break;
+          default:
+            return;
+        }
+        
+        e.preventDefault();
+        updateAsset(container.id, selectedAssetId, updates, orientation);
+      } else if (selectedId) {
+        const container = containers.find(c => c.id === selectedId);
+        if (!container) return;
+        
+        const pos = container[orientation];
+        let updates: Partial<{ x: number; y: number; width: number; height: number }> = {};
+        
+        switch (e.key) {
+          case 'ArrowLeft':
+            if (isResizing) {
+              updates = { width: Math.max(5, pos.width - step) };
+              if (e.shiftKey) {
+                // Maintain aspect ratio
+                const ratio = pos.height / pos.width;
+                updates.height = Math.max(5, updates.width * ratio);
+              }
+            } else {
+              updates = { x: pos.x - step };
+            }
+            break;
+          case 'ArrowRight':
+            if (isResizing) {
+              updates = { width: pos.width + step };
+              if (e.shiftKey) {
+                // Maintain aspect ratio
+                const ratio = pos.height / pos.width;
+                updates.height = updates.width * ratio;
+              }
+            } else {
+              updates = { x: pos.x + step };
+            }
+            break;
+          case 'ArrowUp':
+            if (isResizing) {
+              updates = { height: Math.max(5, pos.height - step) };
+              if (e.shiftKey) {
+                // Maintain aspect ratio
+                const ratio = pos.width / pos.height;
+                updates.width = Math.max(5, updates.height * ratio);
+              }
+            } else {
+              updates = { y: pos.y - step };
+            }
+            break;
+          case 'ArrowDown':
+            if (isResizing) {
+              updates = { height: pos.height + step };
+              if (e.shiftKey) {
+                // Maintain aspect ratio
+                const ratio = pos.width / pos.height;
+                updates.width = updates.height * ratio;
+              }
+            } else {
+              updates = { y: pos.y + step };
+            }
+            break;
+          default:
+            return;
+        }
+        
+        e.preventDefault();
+        updateContainer(selectedId, updates, orientation);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, selectedAssetId, containers, orientation, updateContainer, updateAsset, isActive]);
 
   const handleDragMove = (e: KonvaEventObject<DragEvent>, id: string) => {
     const node = e.target;
@@ -308,6 +495,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           transformable={true}
           onClick={(e) => {
             e.cancelBubble = true;
+            // Set this canvas as active
+            document.querySelectorAll('.canvas-stage').forEach((canvas) => {
+              canvas.classList.remove('active-canvas');
+            });
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
+            
             if (selectedId === containerId && selectedAssetId === asset.id) {
               setSelectedId(null);
               setSelectedAssetId(null);
@@ -317,6 +511,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             }
           }}
           onDragMove={(e) => {
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
             const node = e.target;
             
             if (transform.position.reference === 'container') {
@@ -367,6 +563,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             updateDependentAssets(asset.id);
           }}
           onTransform={(e) => {
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
             const node = e.target;
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
@@ -447,6 +645,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             fill="red"
             draggable
             onDragMove={(e) => {
+              isActiveCanvasRef.current = true;
+              setIsActive(true);
               const node = e.target;
               
               if (transform.position.reference === 'container') {
@@ -513,6 +713,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           draggable
           onClick={(e) => {
             e.cancelBubble = true;
+            // Set this canvas as active
+            document.querySelectorAll('.canvas-stage').forEach((canvas) => {
+              canvas.classList.remove('active-canvas');
+            });
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
+            
             if (selectedId === container.id) {
               setSelectedId(null);
             } else {
@@ -520,8 +727,16 @@ export const Canvas = ({ orientation }: CanvasProps) => {
               setSelectedAssetId(null);
             }
           }}
-          onDragMove={(e) => handleDragMove(e, container.id)}
-          onTransform={(e) => handleTransform(e, container.id)}
+          onDragMove={(e) => {
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
+            handleDragMove(e, container.id);
+          }}
+          onTransform={(e) => {
+            isActiveCanvasRef.current = true;
+            setIsActive(true);
+            handleTransform(e, container.id);
+          }}
         />
         <Group>
           {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
@@ -529,6 +744,42 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       </Group>
     );
   };
+
+  // Update active canvas on stage interaction
+  const handleStageClick = (e: any) => {
+    // Prevent bubbling if clicking on a shape or asset
+    if (e.target !== e.currentTarget && e.target !== stageRef.current) {
+      return;
+    }
+
+    // Set all canvases as inactive
+    document.querySelectorAll('.canvas-stage').forEach((canvas) => {
+      canvas.classList.remove('active-canvas');
+    });
+    
+    // Set this canvas as active
+    isActiveCanvasRef.current = true;
+    setIsActive(true);
+
+    // Clear selection if clicking on empty space
+    if (e.target === stageRef.current) {
+      setSelectedId(null);
+      setSelectedAssetId(null);
+    }
+  };
+
+  // Handle clicks outside any canvas
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (stageRef.current && !stageRef.current.contains(e.target)) {
+        isActiveCanvasRef.current = false;
+        setIsActive(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="relative">
@@ -542,7 +793,9 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         />
       ))}
       
-      <div className="absolute inset-0 rounded-lg overflow-hidden border-2 border-editor-grid" style={{
+      <div className={`absolute inset-0 rounded-lg overflow-hidden border-2 transition-colors duration-200 ${
+        isActive ? 'border-editor-accent' : 'border-editor-grid'
+      }`} style={{
         width: width + 44,
         height: height + 88,
         background: '#1a1b26',
@@ -550,9 +803,12 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       }}>
         <div className="absolute left-1/2 -translate-x-1/2 w-32 h-7 bg-editor-grid rounded-b-2xl" />
         <Stage
+          ref={stageRef}
           width={width}
           height={height}
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
+          className="canvas-stage absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
+          onClick={handleStageClick}
+          onTap={handleStageClick}
         >
           <Layer>
             {/* Grid */}

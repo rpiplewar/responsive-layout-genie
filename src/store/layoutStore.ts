@@ -61,11 +61,12 @@ export interface AssetMetadata {
   dateUploaded: number;
 }
 
-interface LayoutState {
+export interface LayoutState {
   containers: Container[];
   selectedId: string | null;
   selectedAssetId: string | null;
   selectedDevice: string;
+  activeOrientation: 'portrait' | 'landscape' | null;
   uploadedImages: { [key: string]: string };
   assetMetadata: { [key: string]: AssetMetadata };
   addContainer: (parentId?: string) => void;
@@ -77,6 +78,7 @@ interface LayoutState {
   setSelectedId: (id: string | null) => void;
   setSelectedAssetId: (id: string | null) => void;
   setSelectedDevice: (device: string) => void;
+  setActiveOrientation: (orientation: 'portrait' | 'landscape' | null) => void;
   updateContainerName: (id: string, name: string) => void;
   updateAssetName: (containerId: string, assetId: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
@@ -101,6 +103,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   selectedId: null,
   selectedAssetId: null,
   selectedDevice: 'iPhone SE',
+  activeOrientation: null,
   uploadedImages: {},
   assetMetadata: {},
 
@@ -198,7 +201,13 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       selectedId: state.selectedId === id ? null : state.selectedId,
     })),
 
-  setSelectedId: (id) => set({ selectedId: id }),
+  setSelectedId: (id) => {
+    set((state) => ({
+      selectedId: id,
+      selectedAssetId: null,
+      activeOrientation: id ? state.activeOrientation : null
+    }));
+  },
   
   setSelectedDevice: (device) => set({ selectedDevice: device }),
 
@@ -247,7 +256,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     }));
   },
 
-  setSelectedAssetId: (id) => set({ selectedAssetId: id }),
+  setSelectedAssetId: (id) => {
+    set((state) => ({
+      selectedAssetId: id,
+      activeOrientation: id ? state.activeOrientation : null
+    }));
+  },
 
   updateAssetName: (containerId: string, assetId: string, name: string) => {
     set((state) => ({
@@ -306,7 +320,15 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           ...acc,
           [id]: {
             ...asset,
-            name: asset.key
+            name: asset.key,
+            portrait: {
+              ...asset.portrait,
+              isVisible: asset.portrait.isVisible ?? true
+            },
+            landscape: {
+              ...asset.landscape,
+              isVisible: asset.landscape.isVisible ?? true
+            }
           }
         }), {});
       }
@@ -450,7 +472,15 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             ...acc,
             [id]: {
               ...asset,
-              key: asset.name
+              key: asset.name,
+              portrait: {
+                ...asset.portrait,
+                isVisible: asset.portrait.isVisible ?? true
+              },
+              landscape: {
+                ...asset.landscape,
+                isVisible: asset.landscape.isVisible ?? true
+              }
             }
           }), {}) : {},
         };
@@ -538,5 +568,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       console.error('Export error:', error);
       throw error;
     }
-  }
+  },
+
+  setActiveOrientation: (orientation) => set({ activeOrientation: orientation }),
 }));
