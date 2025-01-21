@@ -276,3 +276,5 @@ The project follows a standard React application structure:
 3. Allow setting asset origin
 4. Allow setting position relative to another asset, make it work
 5. When changing device, it should work based on percentages
+6. I should be able to resize assets too
+7. Render asset should be recursive (rather than just one level)

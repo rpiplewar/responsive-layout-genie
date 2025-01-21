@@ -550,6 +550,9 @@ export const PropertiesPanel = () => {
                       <Label className="text-gray-400">Position X</Label>
                       <Input
                         type="number"
+                        step="any"
+                        min="-10"
+                        max="10"
                         value={selectedAsset.portrait.position.x}
                         onChange={(e) =>
                           handleAssetChange(
@@ -568,6 +571,9 @@ export const PropertiesPanel = () => {
                       <Label className="text-gray-400">Position Y</Label>
                       <Input
                         type="number"
+                        step="any"
+                        min="-10"
+                        max="10"
                         value={selectedAsset.portrait.position.y}
                         onChange={(e) =>
                           handleAssetChange(
@@ -747,6 +753,9 @@ export const PropertiesPanel = () => {
                       <Label className="text-gray-400">Position X</Label>
                       <Input
                         type="number"
+                        step="any"
+                        min="-10"
+                        max="10"
                         value={selectedAsset.landscape.position.x}
                         onChange={(e) =>
                           handleAssetChange(
@@ -765,6 +774,9 @@ export const PropertiesPanel = () => {
                       <Label className="text-gray-400">Position Y</Label>
                       <Input
                         type="number"
+                        step="any"
+                        min="-10"
+                        max="10"
                         value={selectedAsset.landscape.position.y}
                         onChange={(e) =>
                           handleAssetChange(
