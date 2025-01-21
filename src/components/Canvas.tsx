@@ -41,11 +41,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     setSelectedId, 
     selectedDevice,
     uploadedImages,
-    selectedAssetId
+    selectedAssetId,
+    setSelectedAssetId
   } = useLayoutStore();
   
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
+  const selectedAssetRef = useRef<any>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
 
   const device = devices[selectedDevice];
@@ -72,11 +74,16 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   }, []);
 
   useEffect(() => {
-    if (selectedId && transformerRef.current && selectedShapeRef.current) {
-      transformerRef.current.nodes([selectedShapeRef.current]);
-      transformerRef.current.getLayer().batchDraw();
+    if (transformerRef.current) {
+      if (selectedId && selectedShapeRef.current) {
+        transformerRef.current.nodes([selectedShapeRef.current]);
+        transformerRef.current.getLayer().batchDraw();
+      } else if (selectedAssetId && selectedAssetRef.current) {
+        transformerRef.current.nodes([selectedAssetRef.current]);
+        transformerRef.current.getLayer().batchDraw();
+      }
     }
-  }, [selectedId]);
+  }, [selectedId, selectedAssetId]);
 
   const handleDragMove = (e: KonvaEventObject<DragEvent>, id: string) => {
     const node = e.target;
@@ -250,6 +257,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     return (
       <Group key={asset.id}>
         <Image
+          ref={isSelected ? selectedAssetRef : undefined}
           image={image}
           x={originX}
           y={originY}
@@ -259,6 +267,17 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           offsetY={transform.origin.y * height}
           rotation={transform.rotation}
           draggable
+          transformable={true}
+          onClick={(e) => {
+            e.cancelBubble = true;
+            if (selectedId === containerId && selectedAssetId === asset.id) {
+              setSelectedId(null);
+              setSelectedAssetId(null);
+            } else {
+              setSelectedId(containerId);
+              setSelectedAssetId(asset.id);
+            }
+          }}
           onDragMove={(e) => {
             const node = e.target;
             
@@ -315,6 +334,52 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             // Start the cascade of updates from the dragged asset
             updateDependentAssets(asset.id);
           }}
+          onTransform={(e) => {
+            const node = e.target;
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+            
+            // Reset scale since we'll apply it via width/height
+            node.scaleX(1);
+            node.scaleY(1);
+            
+            let newWidth = Math.max(5, node.width() * scaleX);
+            let newHeight = Math.max(5, node.height() * scaleY);
+            
+            // If maintaining aspect ratio, adjust the dimensions
+            if (transform.maintainAspectRatio && image) {
+              const imageAspectRatio = image.width / image.height;
+              const newAspectRatio = newWidth / newHeight;
+              
+              if (transform.scaleMode === 'fit') {
+                if (newAspectRatio > imageAspectRatio) {
+                  // Width is too large
+                  newWidth = newHeight * imageAspectRatio;
+                } else {
+                  // Height is too large
+                  newHeight = newWidth / imageAspectRatio;
+                }
+              } else if (transform.scaleMode === 'fill') {
+                if (newAspectRatio > imageAspectRatio) {
+                  // Height is too small
+                  newHeight = newWidth / imageAspectRatio;
+                } else {
+                  // Width is too small
+                  newWidth = newHeight * imageAspectRatio;
+                }
+              }
+            }
+            
+            const updates = {
+              ...transform,
+              size: {
+                width: newWidth / containerPos.width,
+                height: newHeight / containerPos.height,
+              }
+            };
+            
+            updateAsset(containerId, asset.id, updates, orientation);
+          }}
         />
         {isSelected && (
           <Circle
@@ -370,7 +435,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     const position = container[orientation];
     const x = position.x - position.width / 2;
     const y = position.y - position.height / 2;
-    const isSelected = selectedId === container.id;
+    const isSelected = selectedId === container.id && !selectedAssetId;
     const hasParent = !!container.parentId;
     
     return (
@@ -390,12 +455,17 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           draggable
           onClick={(e) => {
             e.cancelBubble = true;
-            setSelectedId(container.id);
+            if (selectedId === container.id) {
+              setSelectedId(null);
+            } else {
+              setSelectedId(container.id);
+              setSelectedAssetId(null);
+            }
           }}
           onDragMove={(e) => handleDragMove(e, container.id)}
           onTransform={(e) => handleTransform(e, container.id)}
         />
-        <Group onClick={(e) => e.cancelBubble = true}>
+        <Group>
           {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
         </Group>
       </Group>
@@ -456,7 +526,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             {/* Containers */}
             {containers.map(renderContainer)}
 
-            {selectedId && (
+            {/* Transformer - will be used for both containers and assets */}
+            {(selectedId || selectedAssetId) && (
               <Transformer
                 ref={transformerRef}
                 boundBoxFunc={(oldBox, newBox) => {
@@ -466,6 +537,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
                   }
                   return newBox;
                 }}
+                keepRatio={selectedAssetId ? containers.find(c => c.id === selectedId)?.assets[selectedAssetId]?.[orientation].maintainAspectRatio : false}
               />
             )}
           </Layer>
