@@ -4,7 +4,6 @@ import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useMemo } from 'react';
 import { devices } from '../config/devices';
 import useImage from 'use-image';
-import { Button } from '../components/ui/button';
 
 // Component to load a single image
 const ImageLoader = ({ 
@@ -43,17 +42,13 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     selectedDevice,
     uploadedImages,
     selectedAssetId,
-    setSelectedAssetId,
-    viewState,
-    updateViewState,
-    resetViewState
+    setSelectedAssetId
   } = useLayoutStore();
   
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
   const selectedAssetRef = useRef<any>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
-  const stageRef = useRef<any>(null);
 
   const device = devices[selectedDevice];
   const width = orientation === 'portrait' ? device.width : device.height;
@@ -195,49 +190,9 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     updateDependentContainers(id);
   };
 
-  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault();
-    
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const oldScale = viewState[orientation].scale;
-    const pointer = stage.getPointerPosition();
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
-
-    // Handle zoom
-    const scaleBy = 1.1;
-    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-
-    // Limit zoom
-    const scale = Math.min(Math.max(newScale, 0.1), 10);
-
-    const newPos = {
-      x: pointer.x - mousePointTo.x * scale,
-      y: pointer.y - mousePointTo.y * scale,
-    };
-
-    updateViewState({
-      scale,
-      x: newPos.x,
-      y: newPos.y
-    }, orientation);
-  };
-
-  const handleDragStage = (e: KonvaEventObject<DragEvent>) => {
-    updateViewState({
-      x: e.target.x(),
-      y: e.target.y()
-    }, orientation);
-  };
-
   const renderAsset = (containerId: string, asset: Asset) => {
     const container = containers.find(c => c.id === containerId);
     if (!container || !asset.key || !imageElementsRef.current[asset.key]) return null;
-    if (asset.visible === false) return null;
 
     const transform = asset[orientation];
     const containerPos = container[orientation];
@@ -591,31 +546,10 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         borderRadius: '40px',
       }}>
         <div className="absolute left-1/2 -translate-x-1/2 w-32 h-7 bg-editor-grid rounded-b-2xl" />
-        
-        {/* Zoom controls */}
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-            onClick={() => resetViewState(orientation)}
-          >
-            Reset View
-          </Button>
-        </div>
-
         <Stage
-          ref={stageRef}
           width={width}
           height={height}
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
-          onWheel={handleWheel}
-          draggable
-          onDragMove={handleDragStage}
-          x={viewState[orientation].x}
-          y={viewState[orientation].y}
-          scaleX={viewState[orientation].scale}
-          scaleY={viewState[orientation].scale}
         >
           <Layer>
             {/* Grid */}
