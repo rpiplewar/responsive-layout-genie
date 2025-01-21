@@ -28,6 +28,7 @@ export interface AssetTransform {
   scaleMode: 'fit' | 'fill' | 'stretch';
   maintainAspectRatio: boolean;
   rotation: number;
+  isVisible?: boolean;
 }
 
 export interface Asset {
@@ -152,6 +153,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         scaleMode: 'fit',
         maintainAspectRatio: true,
         rotation: 0,
+        isVisible: true,
       },
       landscape: {
         position: {
@@ -164,6 +166,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         scaleMode: 'fit',
         maintainAspectRatio: true,
         rotation: 0,
+        isVisible: true,
       },
     };
 

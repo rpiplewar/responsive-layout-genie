@@ -716,6 +716,17 @@ export const PropertiesPanel = () => {
                       Maintain Aspect Ratio
                     </Label>
                   </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-visible-portrait"
+                      checked={selectedAsset.portrait.isVisible !== false}
+                      onCheckedChange={(checked) => handleAssetChange('isVisible', checked, 'portrait')}
+                    />
+                    <Label htmlFor="is-visible-portrait" className="text-gray-400">
+                      Visible
+                    </Label>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -917,6 +928,17 @@ export const PropertiesPanel = () => {
                       className="text-gray-400"
                     >
                       Maintain Aspect Ratio
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-visible-landscape"
+                      checked={selectedAsset.landscape.isVisible !== false}
+                      onCheckedChange={(checked) => handleAssetChange('isVisible', checked, 'landscape')}
+                    />
+                    <Label htmlFor="is-visible-landscape" className="text-gray-400">
+                      Visible
                     </Label>
                   </div>
                 </div>

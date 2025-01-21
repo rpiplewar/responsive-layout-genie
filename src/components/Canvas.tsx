@@ -195,6 +195,9 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     if (!container || !asset.key || !imageElementsRef.current[asset.key]) return null;
 
     const transform = asset[orientation];
+    // Skip rendering if isVisible is explicitly false
+    if (transform.isVisible === false) return null;
+    
     const containerPos = container[orientation];
     const image = imageElementsRef.current[asset.key];
 
