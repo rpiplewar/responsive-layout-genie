@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, ArrowLeft, Upload } from 'lucide-react';
+import { Trash2, ArrowLeft, Upload, Eye, EyeOff } from 'lucide-react';
 import { devices } from '../config/devices';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,6 +56,7 @@ export const PropertiesPanel = () => {
     importConfig,
     getExportData,
     uploadedImages,
+    toggleAssetVisibility,
   } = useLayoutStore();
 
   const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -475,11 +476,24 @@ export const PropertiesPanel = () => {
                 onClick={() => setSelectedAssetId(asset.id)}
               >
                 <div className="flex justify-between items-center">
-                  <Input
-                    value={asset.name}
-                    onChange={(e) => updateAssetName(selectedId!, asset.id, e.target.value)}
-                    className="bg-editor-grid text-white border-editor-grid"
-                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-6 w-6 ${asset.visible === false ? 'text-gray-400' : 'text-editor-accent'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleAssetVisibility(selectedId!, asset.id);
+                      }}
+                    >
+                      {asset.visible === false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                    <Input
+                      value={asset.name}
+                      onChange={(e) => updateAssetName(selectedId!, asset.id, e.target.value)}
+                      className="bg-editor-grid text-white border-editor-grid"
+                    />
+                  </div>
                   <Button
                     variant="ghost"
                     size="icon"

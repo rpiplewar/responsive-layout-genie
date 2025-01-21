@@ -37,6 +37,7 @@ export interface Asset {
   key: string;
   portrait: AssetTransform;
   landscape: AssetTransform;
+  visible?: boolean;
 }
 
 export interface Container {
@@ -67,6 +68,18 @@ interface LayoutState {
   selectedDevice: string;
   uploadedImages: { [key: string]: string };
   assetMetadata: { [key: string]: AssetMetadata };
+  viewState: {
+    portrait: {
+      scale: number;
+      x: number;
+      y: number;
+    };
+    landscape: {
+      scale: number;
+      x: number;
+      y: number;
+    };
+  };
   addContainer: (parentId?: string) => void;
   addAsset: (containerId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
@@ -86,6 +99,9 @@ interface LayoutState {
   updateAssetKey: (containerId: string, assetId: string, key: string) => void;
   importConfig: (config: { containers: { [key: string]: NestedContainer }; assets: { [key: string]: AssetMetadata } }) => void;
   exportLayout: () => Promise<void>;
+  toggleAssetVisibility: (containerId: string, assetId: string) => void;
+  updateViewState: (updates: Partial<LayoutState['viewState'][keyof LayoutState['viewState']]>, orientation: 'portrait' | 'landscape') => void;
+  resetViewState: (orientation: 'portrait' | 'landscape') => void;
 }
 
 interface NestedContainer {
@@ -102,6 +118,18 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   selectedDevice: 'iPhone SE',
   uploadedImages: {},
   assetMetadata: {},
+  viewState: {
+    portrait: {
+      scale: 1,
+      x: 0,
+      y: 0
+    },
+    landscape: {
+      scale: 1,
+      x: 0,
+      y: 0
+    }
+  },
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
@@ -141,6 +169,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       name: `Asset ${Date.now()}`,
       type: 'image',
       key: '',
+      visible: true,
       portrait: {
         position: {
           reference: 'container',
@@ -535,5 +564,49 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       console.error('Export error:', error);
       throw error;
     }
+  },
+
+  toggleAssetVisibility: (containerId: string, assetId: string) => {
+    set((state) => ({
+      containers: state.containers.map(c => 
+        c.id === containerId 
+          ? {
+              ...c,
+              assets: {
+                ...c.assets,
+                [assetId]: {
+                  ...c.assets[assetId],
+                  visible: c.assets[assetId].visible === undefined ? false : !c.assets[assetId].visible
+                },
+              },
+            }
+          : c
+      ),
+    }));
+  },
+
+  updateViewState: (updates, orientation) => {
+    set((state) => ({
+      viewState: {
+        ...state.viewState,
+        [orientation]: {
+          ...state.viewState[orientation],
+          ...updates
+        }
+      }
+    }));
+  },
+
+  resetViewState: (orientation) => {
+    set((state) => ({
+      viewState: {
+        ...state.viewState,
+        [orientation]: {
+          scale: 1,
+          x: 0,
+          y: 0
+        }
+      }
+    }));
   }
 }));

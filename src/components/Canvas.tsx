@@ -4,6 +4,7 @@ import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useMemo } from 'react';
 import { devices } from '../config/devices';
 import useImage from 'use-image';
+import { Button } from '../components/ui/button';
 
 // Component to load a single image
 const ImageLoader = ({ 
@@ -42,13 +43,17 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     selectedDevice,
     uploadedImages,
     selectedAssetId,
-    setSelectedAssetId
+    setSelectedAssetId,
+    viewState,
+    updateViewState,
+    resetViewState
   } = useLayoutStore();
   
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
   const selectedAssetRef = useRef<any>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
+  const stageRef = useRef<any>(null);
 
   const device = devices[selectedDevice];
   const width = orientation === 'portrait' ? device.width : device.height;
@@ -190,15 +195,87 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     updateDependentContainers(id);
   };
 
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = viewState[orientation].scale;
+    const pointer = stage.getPointerPosition();
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    // Handle zoom
+    const scaleBy = 1.1;
+    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+
+    // Limit zoom
+    const scale = Math.min(Math.max(newScale, 0.1), 10);
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * scale,
+      y: pointer.y - mousePointTo.y * scale,
+    };
+
+    updateViewState({
+      scale,
+      x: newPos.x,
+      y: newPos.y
+    }, orientation);
+  };
+
+  const handleDragStage = (e: KonvaEventObject<DragEvent>) => {
+    updateViewState({
+      x: e.target.x(),
+      y: e.target.y()
+    }, orientation);
+  };
+
   const renderAsset = (containerId: string, asset: Asset) => {
     const container = containers.find(c => c.id === containerId);
     if (!container || !asset.key || !imageElementsRef.current[asset.key]) return null;
+    if (asset.visible === false) return null;
 
     const transform = asset[orientation];
     const containerPos = container[orientation];
     const image = imageElementsRef.current[asset.key];
 
-    // Helper function to recursively calculate origin point
+    const calculateAssetDimensions = (assetTransform: AssetTransform, image: HTMLImageElement | null, isContainerRelative: boolean): { width: number, height: number } => {
+      if (!image) return { width: 0, height: 0 };
+      
+      // For container-relative assets, use container dimensions
+      // For asset-relative positioning, use base dimensions
+      const baseWidth = isContainerRelative ? containerPos.width : image.width;
+      const baseHeight = isContainerRelative ? containerPos.height : image.height;
+      
+      let width = assetTransform.size.width * baseWidth;
+      let height = assetTransform.size.height * baseHeight;
+
+      if (assetTransform.maintainAspectRatio) {
+        const imageAspectRatio = image.width / image.height;
+        const containerAspectRatio = width / height;
+
+        if (assetTransform.scaleMode === 'fit') {
+          if (containerAspectRatio > imageAspectRatio) {
+            width = height * imageAspectRatio;
+          } else {
+            height = width / imageAspectRatio;
+          }
+        } else if (assetTransform.scaleMode === 'fill') {
+          if (containerAspectRatio > imageAspectRatio) {
+            height = width / imageAspectRatio;
+          } else {
+            width = height * imageAspectRatio;
+          }
+        }
+      }
+
+      return { width, height };
+    };
+
     const calculateOriginPoint = (assetId: string, transform: AssetTransform): { x: number, y: number } | null => {
       if (transform.position.reference === 'container') {
         return {
@@ -214,10 +291,35 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       const refOrigin = calculateOriginPoint(refAsset.id, refTransform);
       if (!refOrigin) return null;
 
+      // Calculate reference asset's actual dimensions
+      const refImage = imageElementsRef.current[refAsset.key];
+      const isContainerRelative = refTransform.position.reference === 'container';
+      const { width: refWidth, height: refHeight } = calculateAssetDimensions(refTransform, refImage, isContainerRelative);
+
       return {
-        x: refOrigin.x + transform.position.x * containerPos.width,
-        y: refOrigin.y + transform.position.y * containerPos.height
+        x: refOrigin.x + transform.position.x * refWidth,
+        y: refOrigin.y + transform.position.y * refHeight
       };
+    };
+
+    const calculateRelativePosition = (node: any, referenceId: string) => {
+      const refAsset = container.assets[referenceId];
+      if (!refAsset || !refAsset.key || !imageElementsRef.current[refAsset.key]) return null;
+
+      const refTransform = refAsset[orientation];
+      const refOrigin = calculateOriginPoint(refAsset.id, refTransform);
+      if (!refOrigin) return null;
+
+      // Calculate reference asset's actual dimensions
+      const refImage = imageElementsRef.current[refAsset.key];
+      const isContainerRelative = refTransform.position.reference === 'container';
+      const { width: refWidth, height: refHeight } = calculateAssetDimensions(refTransform, refImage, isContainerRelative);
+
+      // Use reference asset's actual dimensions for relative positioning
+      const newX = (node.x() - refOrigin.x) / refWidth;
+      const newY = (node.y() - refOrigin.y) / refHeight;
+
+      return { x: newX, y: newY };
     };
 
     const origin = calculateOriginPoint(asset.id, transform);
@@ -226,31 +328,9 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     let originX = origin.x;
     let originY = origin.y;
 
-    let width = transform.size.width * containerPos.width;
-    let height = transform.size.height * containerPos.height;
-
-    if (transform.maintainAspectRatio && image) {
-      const imageAspectRatio = image.width / image.height;
-      const containerAspectRatio = width / height;
-
-      if (transform.scaleMode === 'fit') {
-        if (containerAspectRatio > imageAspectRatio) {
-          // Container is wider than image
-          width = height * imageAspectRatio;
-        } else {
-          // Container is taller than image
-          height = width / imageAspectRatio;
-        }
-      } else if (transform.scaleMode === 'fill') {
-        if (containerAspectRatio > imageAspectRatio) {
-          // Container is wider than image
-          height = width / imageAspectRatio;
-        } else {
-          // Container is taller than image
-          width = height * imageAspectRatio;
-        }
-      }
-    }
+    // Calculate dimensions using the same logic as other calculations
+    const isContainerRelative = transform.position.reference === 'container';
+    const { width, height } = calculateAssetDimensions(transform, image, isContainerRelative);
 
     const isSelected = selectedId === containerId && selectedAssetId === asset.id;
 
@@ -295,21 +375,15 @@ export const Canvas = ({ orientation }: CanvasProps) => {
               };
               updateAsset(containerId, asset.id, updates, orientation);
             } else {
-              const refAsset = container.assets[transform.position.reference];
-              if (!refAsset) return;
-
-              const refOrigin = calculateOriginPoint(refAsset.id, refAsset[orientation]);
-              if (!refOrigin) return;
-
-              const newX = (node.x() - refOrigin.x) / containerPos.width;
-              const newY = (node.y() - refOrigin.y) / containerPos.height;
+              const newPos = calculateRelativePosition(node, transform.position.reference);
+              if (!newPos) return;
 
               const updates = {
                 ...transform,
                 position: {
                   ...transform.position,
-                  x: newX,
-                  y: newY
+                  x: newPos.x,
+                  y: newPos.y
                 }
               };
               updateAsset(containerId, asset.id, updates, orientation);
@@ -343,8 +417,18 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             node.scaleX(1);
             node.scaleY(1);
             
+            // Get the reference dimensions based on whether this is container-relative or asset-relative
+            const isContainerRelative = transform.position.reference === 'container';
+            const baseWidth = isContainerRelative ? containerPos.width : image.width;
+            const baseHeight = isContainerRelative ? containerPos.height : image.height;
+            
+            // Calculate new dimensions relative to the base dimensions
             let newWidth = Math.max(5, node.width() * scaleX);
             let newHeight = Math.max(5, node.height() * scaleY);
+            
+            // Convert to relative sizes
+            const relativeWidth = newWidth / baseWidth;
+            const relativeHeight = newHeight / baseHeight;
             
             // If maintaining aspect ratio, adjust the dimensions
             if (transform.maintainAspectRatio && image) {
@@ -373,12 +457,28 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             const updates = {
               ...transform,
               size: {
-                width: newWidth / containerPos.width,
-                height: newHeight / containerPos.height,
+                width: newWidth / baseWidth,
+                height: newHeight / baseHeight
               }
             };
             
             updateAsset(containerId, asset.id, updates, orientation);
+            
+            // Update dependent assets
+            const updateDependentAssets = (assetId: string) => {
+              Object.entries(container.assets).forEach(([id, dependentAsset]) => {
+                if (dependentAsset[orientation].position.reference === assetId) {
+                  // Keep the same relative position but update based on new reference size
+                  updateAsset(containerId, id, dependentAsset[orientation], orientation);
+                  
+                  // Recursively update assets that reference this dependent asset
+                  updateDependentAssets(id);
+                }
+              });
+            };
+
+            // Start the cascade of updates from the transformed asset
+            updateDependentAssets(asset.id);
           }}
         />
         {isSelected && (
@@ -491,10 +591,31 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         borderRadius: '40px',
       }}>
         <div className="absolute left-1/2 -translate-x-1/2 w-32 h-7 bg-editor-grid rounded-b-2xl" />
+        
+        {/* Zoom controls */}
+        <div className="absolute top-4 right-4 flex gap-2 z-10">
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
+            onClick={() => resetViewState(orientation)}
+          >
+            Reset View
+          </Button>
+        </div>
+
         <Stage
+          ref={stageRef}
           width={width}
           height={height}
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
+          onWheel={handleWheel}
+          draggable
+          onDragMove={handleDragStage}
+          x={viewState[orientation].x}
+          y={viewState[orientation].y}
+          scaleX={viewState[orientation].scale}
+          scaleY={viewState[orientation].scale}
         >
           <Layer>
             {/* Grid */}
