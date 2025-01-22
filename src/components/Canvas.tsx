@@ -106,7 +106,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle keyboard events if this orientation is active
-      if (!isActive) return;
+      if (!isActiveCanvasRef.current) return;
       if (!selectedId && !selectedAssetId) return;
       
       console.log('Key event:', {
@@ -117,7 +117,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         shiftKey: e.shiftKey,
         code: e.code,
         orientation,
-        isActive
+        isActive: isActiveCanvasRef.current
       });
       
       const step = e.shiftKey ? 10 : 1;
@@ -495,12 +495,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           transformable={true}
           onClick={(e) => {
             e.cancelBubble = true;
-            // Set this canvas as active
-            document.querySelectorAll('.canvas-stage').forEach((canvas) => {
-              canvas.classList.remove('active-canvas');
-            });
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             
             if (selectedId === containerId && selectedAssetId === asset.id) {
               setSelectedId(null);
@@ -511,8 +506,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             }
           }}
           onDragMove={(e) => {
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             const node = e.target;
             
             if (transform.position.reference === 'container') {
@@ -563,8 +557,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             updateDependentAssets(asset.id);
           }}
           onTransform={(e) => {
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             const node = e.target;
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
@@ -645,8 +638,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             fill="red"
             draggable
             onDragMove={(e) => {
-              isActiveCanvasRef.current = true;
-              setIsActive(true);
+              handleElementClick();
               const node = e.target;
               
               if (transform.position.reference === 'container') {
@@ -713,12 +705,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           draggable
           onClick={(e) => {
             e.cancelBubble = true;
-            // Set this canvas as active
-            document.querySelectorAll('.canvas-stage').forEach((canvas) => {
-              canvas.classList.remove('active-canvas');
-            });
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             
             if (selectedId === container.id) {
               setSelectedId(null);
@@ -728,13 +715,11 @@ export const Canvas = ({ orientation }: CanvasProps) => {
             }
           }}
           onDragMove={(e) => {
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             handleDragMove(e, container.id);
           }}
           onTransform={(e) => {
-            isActiveCanvasRef.current = true;
-            setIsActive(true);
+            handleElementClick();
             handleTransform(e, container.id);
           }}
         />
@@ -745,41 +730,66 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     );
   };
 
-  // Update active canvas on stage interaction
-  const handleStageClick = (e: any) => {
-    // Prevent bubbling if clicking on a shape or asset
-    if (e.target !== e.currentTarget && e.target !== stageRef.current) {
-      return;
-    }
-
-    // Set all canvases as inactive
-    document.querySelectorAll('.canvas-stage').forEach((canvas) => {
-      canvas.classList.remove('active-canvas');
-    });
-    
-    // Set this canvas as active
-    isActiveCanvasRef.current = true;
-    setIsActive(true);
-
-    // Clear selection if clicking on empty space
-    if (e.target === stageRef.current) {
-      setSelectedId(null);
-      setSelectedAssetId(null);
-    }
-  };
-
   // Handle clicks outside any canvas
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (stageRef.current && !stageRef.current.contains(e.target)) {
+      const target = e.target as HTMLElement;
+      // Check if the click is outside both canvases
+      const isOutsideCanvas = !target.closest('.canvas-stage');
+      
+      if (isOutsideCanvas) {
         isActiveCanvasRef.current = false;
         setIsActive(false);
+        setActiveOrientation(null);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [setActiveOrientation]);
+
+  // Update active canvas on stage interaction
+  const handleStageClick = (e: any) => {
+    e.cancelBubble = true;
+    
+    // Set all canvases as inactive first
+    document.querySelectorAll('.canvas-stage').forEach((canvas) => {
+      canvas.classList.remove('active-canvas');
+    });
+    
+    // Set this canvas as active and update orientation
+    isActiveCanvasRef.current = true;
+    setIsActive(true);
+    setActiveOrientation(orientation);
+
+    // Only clear selection if clicking on empty stage space
+    if (e.target === e.currentTarget) {
+      setSelectedId(null);
+      setSelectedAssetId(null);
+    }
+  };
+
+  // Sync active state with global orientation
+  useEffect(() => {
+    if (activeOrientation === orientation) {
+      isActiveCanvasRef.current = true;
+      setIsActive(true);
+    } else {
+      isActiveCanvasRef.current = false;
+      setIsActive(false);
+    }
+  }, [activeOrientation, orientation]);
+
+  // Update active canvas state when clicking on containers or assets
+  const handleElementClick = () => {
+    // Set all canvases as inactive
+    document.querySelectorAll('.canvas-stage').forEach((canvas) => {
+      canvas.classList.remove('active-canvas');
+    });
+    isActiveCanvasRef.current = true;
+    setIsActive(true);
+    setActiveOrientation(orientation);
+  };
 
   return (
     <div className="relative">
@@ -809,6 +819,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           className="canvas-stage absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
           onClick={handleStageClick}
           onTap={handleStageClick}
+          onMouseDown={handleStageClick}
         >
           <Layer>
             {/* Grid */}

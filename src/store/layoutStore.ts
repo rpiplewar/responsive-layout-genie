@@ -69,6 +69,11 @@ export interface LayoutState {
   activeOrientation: 'portrait' | 'landscape' | null;
   uploadedImages: { [key: string]: string };
   assetMetadata: { [key: string]: AssetMetadata };
+  history: {
+    past: Container[][];
+    future: Container[][];
+  };
+  saveToHistory: (newContainers: Container[]) => void;
   addContainer: (parentId?: string) => void;
   addAsset: (containerId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
@@ -89,6 +94,10 @@ export interface LayoutState {
   updateAssetKey: (containerId: string, assetId: string, key: string) => void;
   importConfig: (config: { containers: { [key: string]: NestedContainer }; assets: { [key: string]: AssetMetadata } }) => void;
   exportLayout: () => Promise<void>;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 }
 
 interface NestedContainer {
@@ -106,6 +115,63 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   activeOrientation: null,
   uploadedImages: {},
   assetMetadata: {},
+  history: {
+    past: [],
+    future: []
+  },
+
+  // Helper function to save state to history
+  saveToHistory: (newContainers: Container[]) => {
+    const { containers, history } = get();
+    set({
+      containers: newContainers,
+      history: {
+        past: [...history.past, containers],
+        future: []
+      }
+    });
+  },
+
+  // Undo/Redo functionality
+  undo: () => {
+    const { history, containers } = get();
+    if (history.past.length === 0) return;
+
+    const previous = history.past[history.past.length - 1];
+    const newPast = history.past.slice(0, -1);
+
+    set({
+      containers: previous,
+      history: {
+        past: newPast,
+        future: [containers, ...history.future]
+      }
+    });
+  },
+
+  redo: () => {
+    const { history, containers } = get();
+    if (history.future.length === 0) return;
+
+    const next = history.future[0];
+    const newFuture = history.future.slice(1);
+
+    set({
+      containers: next,
+      history: {
+        past: [...history.past, containers],
+        future: newFuture
+      }
+    });
+  },
+
+  canUndo: () => {
+    return get().history.past.length > 0;
+  },
+
+  canRedo: () => {
+    return get().history.future.length > 0;
+  },
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
@@ -130,10 +196,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       assets: {},
     };
 
-    set((state) => ({
-      containers: [...state.containers, newContainer],
-      selectedId: newContainer.id,
-    }));
+    const newContainers = [...get().containers, newContainer];
+    get().saveToHistory(newContainers);
+    set({ selectedId: newContainer.id });
   },
 
   addAsset: (containerId: string) => {
@@ -173,33 +238,32 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       },
     };
 
-    set((state) => ({
-      containers: state.containers.map(c => 
-        c.id === containerId 
-          ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
-          : c
-      ),
-      selectedAssetId: newAsset.id,
-    }));
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
+        : c
+    );
+    get().saveToHistory(newContainers);
+    set({ selectedAssetId: newAsset.id });
   },
 
-  updateContainer: (id, updates, orientation) =>
-    set((state) => ({
-      containers: state.containers.map((container) =>
-        container.id === id
-          ? {
-              ...container,
-              [orientation]: { ...container[orientation], ...updates },
-            }
-          : container
-      ),
-    })),
+  updateContainer: (id, updates, orientation) => {
+    const newContainers = get().containers.map((container) =>
+      container.id === id
+        ? {
+            ...container,
+            [orientation]: { ...container[orientation], ...updates },
+          }
+        : container
+    );
+    get().saveToHistory(newContainers);
+  },
 
-  deleteContainer: (id) =>
-    set((state) => ({
-      containers: state.containers.filter((container) => container.id !== id && container.parentId !== id),
-      selectedId: state.selectedId === id ? null : state.selectedId,
-    })),
+  deleteContainer: (id) => {
+    const newContainers = get().containers.filter((container) => container.id !== id && container.parentId !== id);
+    get().saveToHistory(newContainers);
+    set({ selectedId: get().selectedId === id ? null : get().selectedId });
+  },
 
   setSelectedId: (id) => {
     set((state) => ({
@@ -211,49 +275,47 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   
   setSelectedDevice: (device) => set({ selectedDevice: device }),
 
-  updateContainerName: (id, name) =>
-    set((state) => ({
-      containers: state.containers.map((container) =>
-        container.id === id ? { ...container, name } : container
-      ),
-    })),
+  updateContainerName: (id, name) => {
+    const newContainers = get().containers.map((container) =>
+      container.id === id ? { ...container, name } : container
+    );
+    get().saveToHistory(newContainers);
+  },
 
   updateAsset: (containerId: string, assetId: string, updates: Partial<AssetTransform>, orientation: 'portrait' | 'landscape') => {
-    set((state) => ({
-      containers: state.containers.map(c => 
-        c.id === containerId 
-          ? {
-              ...c,
-              assets: {
-                ...c.assets,
-                [assetId]: {
-                  ...c.assets[assetId],
-                  [orientation]: {
-                    ...c.assets[assetId][orientation],
-                    ...updates,
-                  },
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? {
+            ...c,
+            assets: {
+              ...c.assets,
+              [assetId]: {
+                ...c.assets[assetId],
+                [orientation]: {
+                  ...c.assets[assetId][orientation],
+                  ...updates,
                 },
               },
-            }
-          : c
-      ),
-    }));
+            },
+          }
+        : c
+    );
+    get().saveToHistory(newContainers);
   },
 
   deleteAsset: (containerId: string, assetId: string) => {
-    set((state) => ({
-      containers: state.containers.map(c => 
-        c.id === containerId 
-          ? {
-              ...c,
-              assets: Object.fromEntries(
-                Object.entries(c.assets).filter(([id]) => id !== assetId)
-              ),
-            }
-          : c
-      ),
-      selectedAssetId: state.selectedAssetId === assetId ? null : state.selectedAssetId,
-    }));
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? {
+            ...c,
+            assets: Object.fromEntries(
+              Object.entries(c.assets).filter(([id]) => id !== assetId)
+            ),
+          }
+        : c
+    );
+    get().saveToHistory(newContainers);
+    set({ selectedAssetId: get().selectedAssetId === assetId ? null : get().selectedAssetId });
   },
 
   setSelectedAssetId: (id) => {
