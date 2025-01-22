@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, ArrowLeft, Upload } from 'lucide-react';
+import { Trash2, ArrowLeft, Upload, Copy } from 'lucide-react';
 import { devices } from '../config/devices';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,6 +56,7 @@ export const PropertiesPanel = () => {
     importConfig,
     getExportData,
     uploadedImages,
+    duplicateAsset,
   } = useLayoutStore();
 
   const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -480,14 +481,30 @@ export const PropertiesPanel = () => {
                     onChange={(e) => updateAssetName(selectedId!, asset.id, e.target.value)}
                     className="bg-editor-grid text-white border-editor-grid"
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-red-500 hover:text-red-400"
-                    onClick={() => deleteAsset(selectedId!, asset.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-gray-400 hover:text-editor-accent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateAsset(selectedId!, asset.id);
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-400"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteAsset(selectedId!, asset.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

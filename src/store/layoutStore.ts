@@ -76,6 +76,7 @@ export interface LayoutState {
   saveToHistory: (newContainers: Container[]) => void;
   addContainer: (parentId?: string) => void;
   addAsset: (containerId: string) => void;
+  duplicateAsset: (containerId: string, assetId: string) => void;
   updateContainer: (id: string, updates: Partial<ContainerPosition>, orientation: 'portrait' | 'landscape') => void;
   updateAsset: (containerId: string, assetId: string, updates: Partial<AssetTransform>, orientation: 'portrait' | 'landscape') => void;
   deleteContainer: (id: string) => void;
@@ -458,19 +459,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       const { [assetId]: _, ...remainingImages } = state.uploadedImages;
       const { [assetId]: __, ...remainingMetadata } = state.assetMetadata;
       
-      // Also remove the asset from any containers that use it
-      const updatedContainers = state.containers.map(container => ({
-        ...container,
-        assets: Object.fromEntries(
-          Object.entries(container.assets)
-            .filter(([_, asset]) => asset.key !== assetId)
-        )
-      }));
-
       return {
         uploadedImages: remainingImages,
         assetMetadata: remainingMetadata,
-        containers: updatedContainers
+        containers: state.containers // Keep the containers unchanged
       };
     });
   },
@@ -633,4 +625,24 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   setActiveOrientation: (orientation) => set({ activeOrientation: orientation }),
+
+  duplicateAsset: (containerId: string, assetId: string) => {
+    const container = get().containers.find(c => c.id === containerId);
+    if (!container || !container.assets[assetId]) return;
+
+    const sourceAsset = container.assets[assetId];
+    const newAsset: Asset = {
+      ...sourceAsset,
+      id: crypto.randomUUID(),
+      name: `${sourceAsset.name} (Copy)`,
+    };
+
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
+        : c
+    );
+    get().saveToHistory(newContainers);
+    set({ selectedAssetId: newAsset.id });
+  },
 }));
