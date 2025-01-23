@@ -51,6 +51,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   const selectedShapeRef = useRef<any>(null);
   const selectedAssetRef = useRef<any>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
+  const assetDimensionsRef = useRef<Record<string, { width: number; height: number }>>({});
   const isActiveCanvasRef = useRef(false);
   const stageRef = useRef<any>(null);
 
@@ -388,13 +389,25 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     const containerPos = container[orientation];
     const image = imageElementsRef.current[asset.key];
 
-    const calculateAssetDimensions = (assetTransform: AssetTransform, image: HTMLImageElement | null, isContainerRelative: boolean): { width: number, height: number } => {
+    const calculateAssetDimensions = (assetTransform: AssetTransform, image: HTMLImageElement | null, isContainerRelative: boolean, referenceAssetId?: string): { width: number, height: number } => {
       if (!image) return { width: 0, height: 0 };
       
-      // For container-relative assets, use container dimensions
-      // For asset-relative positioning, use base dimensions
-      const baseWidth = isContainerRelative ? containerPos.width : image.width;
-      const baseHeight = isContainerRelative ? containerPos.height : image.height;
+      let baseWidth: number;
+      let baseHeight: number;
+      
+      if (isContainerRelative) {
+        baseWidth = containerPos.width;
+        baseHeight = containerPos.height;
+      } else if (referenceAssetId && assetDimensionsRef.current[referenceAssetId]) {
+        // Use the actual display dimensions of the reference asset
+        const refDimensions = assetDimensionsRef.current[referenceAssetId];
+        baseWidth = refDimensions.width;
+        baseHeight = refDimensions.height;
+      } else {
+        // Fallback to container dimensions if reference not found
+        baseWidth = containerPos.width;
+        baseHeight = containerPos.height;
+      }
       
       let width = assetTransform.size.width * baseWidth;
       let height = assetTransform.size.height * baseHeight;
@@ -436,14 +449,12 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       const refOrigin = calculateOriginPoint(refAsset.id, refTransform);
       if (!refOrigin) return null;
 
-      // Calculate reference asset's actual dimensions
-      const refImage = imageElementsRef.current[refAsset.key];
-      const isContainerRelative = refTransform.position.reference === 'container';
-      const { width: refWidth, height: refHeight } = calculateAssetDimensions(refTransform, refImage, isContainerRelative);
+      // Get the reference asset's dimensions from our cache
+      const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
 
       return {
-        x: refOrigin.x + transform.position.x * refWidth,
-        y: refOrigin.y + transform.position.y * refHeight
+        x: refOrigin.x + transform.position.x * refDimensions.width,
+        y: refOrigin.y + transform.position.y * refDimensions.height
       };
     };
 
@@ -455,27 +466,28 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       const refOrigin = calculateOriginPoint(refAsset.id, refTransform);
       if (!refOrigin) return null;
 
-      // Calculate reference asset's actual dimensions
-      const refImage = imageElementsRef.current[refAsset.key];
-      const isContainerRelative = refTransform.position.reference === 'container';
-      const { width: refWidth, height: refHeight } = calculateAssetDimensions(refTransform, refImage, isContainerRelative);
+      // Get the reference asset's dimensions from our cache
+      const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
 
       // Use reference asset's actual dimensions for relative positioning
-      const newX = (node.x() - refOrigin.x) / refWidth;
-      const newY = (node.y() - refOrigin.y) / refHeight;
+      const newX = (node.x() - refOrigin.x) / refDimensions.width;
+      const newY = (node.y() - refOrigin.y) / refDimensions.height;
 
       return { x: newX, y: newY };
     };
+
+    const isContainerRelative = transform.position.reference === 'container';
+    const referenceAssetId = !isContainerRelative ? transform.position.reference : undefined;
+    const { width, height } = calculateAssetDimensions(transform, image, isContainerRelative, referenceAssetId);
+
+    // Store the calculated dimensions for other assets to reference
+    assetDimensionsRef.current[asset.id] = { width, height };
 
     const origin = calculateOriginPoint(asset.id, transform);
     if (!origin) return null;
 
     let originX = origin.x;
     let originY = origin.y;
-
-    // Calculate dimensions using the same logic as other calculations
-    const isContainerRelative = transform.position.reference === 'container';
-    const { width, height } = calculateAssetDimensions(transform, image, isContainerRelative);
 
     const isSelected = selectedId === containerId && selectedAssetId === asset.id;
 
@@ -559,75 +571,69 @@ export const Canvas = ({ orientation }: CanvasProps) => {
           onTransform={(e) => {
             handleElementClick();
             const node = e.target;
+            
+            // Get current scale
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
             
-            // Reset scale since we'll apply it via width/height
-            node.scaleX(1);
-            node.scaleY(1);
-            
-            // Get the reference dimensions based on whether this is container-relative or asset-relative
+            // Get the reference dimensions
             const isContainerRelative = transform.position.reference === 'container';
-            const baseWidth = isContainerRelative ? containerPos.width : image.width;
-            const baseHeight = isContainerRelative ? containerPos.height : image.height;
+            const baseWidth = isContainerRelative ? containerPos.width : (
+              assetDimensionsRef.current[transform.position.reference]?.width || containerPos.width
+            );
+            const baseHeight = isContainerRelative ? containerPos.height : (
+              assetDimensionsRef.current[transform.position.reference]?.height || containerPos.height
+            );
             
-            // Calculate new dimensions relative to the base dimensions
-            let newWidth = Math.max(5, node.width() * scaleX);
-            let newHeight = Math.max(5, node.height() * scaleY);
+            // Calculate new dimensions relative to reference
+            const currentWidth = width;  // Current display width
+            const currentHeight = height;  // Current display height
             
-            // Convert to relative sizes
-            const relativeWidth = newWidth / baseWidth;
-            const relativeHeight = newHeight / baseHeight;
+            // Convert current size to relative size
+            const currentRelativeWidth = currentWidth / baseWidth;
+            const currentRelativeHeight = currentHeight / baseHeight;
+            
+            // Apply scale to relative size
+            let newWidth = currentRelativeWidth * scaleX;
+            let newHeight = currentRelativeHeight * scaleY;
             
             // If maintaining aspect ratio, adjust the dimensions
             if (transform.maintainAspectRatio && image) {
               const imageAspectRatio = image.width / image.height;
-              const newAspectRatio = newWidth / newHeight;
+              const newAspectRatio = (newWidth * baseWidth) / (newHeight * baseHeight);
               
               if (transform.scaleMode === 'fit') {
                 if (newAspectRatio > imageAspectRatio) {
-                  // Width is too large
                   newWidth = newHeight * imageAspectRatio;
                 } else {
-                  // Height is too large
                   newHeight = newWidth / imageAspectRatio;
                 }
               } else if (transform.scaleMode === 'fill') {
                 if (newAspectRatio > imageAspectRatio) {
-                  // Height is too small
                   newHeight = newWidth / imageAspectRatio;
                 } else {
-                  // Width is too small
                   newWidth = newHeight * imageAspectRatio;
                 }
               }
             }
             
+            // Ensure minimum size
+            newWidth = Math.max(0.01, newWidth);
+            newHeight = Math.max(0.01, newHeight);
+            
+            // Reset scale since we'll apply it via width/height
+            node.scaleX(1);
+            node.scaleY(1);
+            
             const updates = {
               ...transform,
               size: {
-                width: newWidth / baseWidth,
-                height: newHeight / baseHeight
+                width: newWidth,
+                height: newHeight
               }
             };
             
             updateAsset(containerId, asset.id, updates, orientation);
-            
-            // Update dependent assets
-            const updateDependentAssets = (assetId: string) => {
-              Object.entries(container.assets).forEach(([id, dependentAsset]) => {
-                if (dependentAsset[orientation].position.reference === assetId) {
-                  // Keep the same relative position but update based on new reference size
-                  updateAsset(containerId, id, dependentAsset[orientation], orientation);
-                  
-                  // Recursively update assets that reference this dependent asset
-                  updateDependentAssets(id);
-                }
-              });
-            };
-
-            // Start the cascade of updates from the transformed asset
-            updateDependentAssets(asset.id);
           }}
         />
         {isSelected && (

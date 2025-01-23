@@ -383,7 +383,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           ...acc,
           [id]: {
             ...asset,
-            name: asset.key,
+            name: asset.name,
             portrait: {
               ...asset.portrait,
               isVisible: asset.portrait.isVisible ?? true
