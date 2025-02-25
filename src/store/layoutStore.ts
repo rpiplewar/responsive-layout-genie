@@ -61,6 +61,35 @@ export interface AssetMetadata {
   dateUploaded: number;
 }
 
+interface ExportedAsset {
+  name: string;
+  type: 'image';
+  key: string;
+  portrait: AssetTransform & { isVisible: boolean };
+  landscape: AssetTransform & { isVisible: boolean };
+}
+
+interface ExportedContainer {
+  portrait: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  landscape: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  assets?: { [key: string]: ExportedAsset };
+  children?: { [key: string]: ExportedContainer };
+}
+
+interface ExportData {
+  containers: { [key: string]: ExportedContainer };
+}
+
 export interface LayoutState {
   containers: Container[];
   selectedId: string | null;
@@ -88,7 +117,7 @@ export interface LayoutState {
   updateContainerName: (id: string, name: string) => void;
   updateAssetName: (containerId: string, assetId: string, name: string) => void;
   getContainerPath: (id: string) => Container[];
-  getExportData: () => any;
+  getExportData: () => ExportData;
   uploadImage: (assetId: string, file: File) => void;
   deleteAssetFromLibrary: (assetId: string) => void;
   updateAssetMetadata: (assetId: string, updates: Partial<AssetMetadata>) => void;
@@ -99,6 +128,8 @@ export interface LayoutState {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+  reorderContainer: (containerId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
+  updateContainerParent: (containerId: string, newParentId: string | null) => void;
 }
 
 interface NestedContainer {
@@ -175,7 +206,18 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   addContainer: (parentId?: string) => {
+    console.log('addContainer called with parentId:', parentId);
+    console.log('Current state:', {
+      selectedId: get().selectedId,
+      selectedAssetId: get().selectedAssetId
+    });
+    
+    // If an asset is selected and no parentId is provided, we should create a container at root level
+    // We don't need to do anything special here, just make sure we don't use the selectedId as parentId
+    
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
+    console.log('Parent container found:', parent ? { id: parent.id, name: parent.name } : null);
+    
     const parentPos = parent ? parent.portrait : null;
     
     const newContainer: Container = {
@@ -197,9 +239,20 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       assets: {},
     };
 
-    const newContainers = [...get().containers, newContainer];
-    get().saveToHistory(newContainers);
-    set({ selectedId: newContainer.id });
+    console.log('New container created:', { id: newContainer.id, name: newContainer.name, parentId: newContainer.parentId });
+    
+    try {
+      const newContainers = [...get().containers, newContainer];
+      get().saveToHistory(newContainers);
+      
+      // Clear the selectedAssetId when creating a new container
+      set({ 
+        selectedId: newContainer.id,
+        selectedAssetId: null 
+      });
+    } catch (error) {
+      console.error('Error creating container:', error);
+    }
   },
 
   addAsset: (containerId: string) => {
@@ -245,7 +298,18 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         : c
     );
     get().saveToHistory(newContainers);
+    
+    // Update the selected asset ID
     set({ selectedAssetId: newAsset.id });
+    
+    // Also update the layer store to select this asset
+    // We need to import this dynamically to avoid circular dependencies
+    import('./layerStore').then(({ useLayerStore }) => {
+      // Force a sync first to ensure the new asset is in the layer hierarchy
+      useLayerStore.getState().syncWithLayoutStore();
+      // Then select the new asset
+      useLayerStore.getState().selectLayer(newAsset.id);
+    });
   },
 
   updateContainer: (id, updates, orientation) => {
@@ -362,8 +426,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const { containers } = get();
     const device = devices[get().selectedDevice];
 
-    const processContainer = (container: Container): any => {
-      const result: any = {
+    const processContainer = (container: Container): ExportedContainer => {
+      const result: ExportedContainer = {
         portrait: {
           x: container.portrait.x / device.width,
           y: container.portrait.y / device.height,
@@ -643,6 +707,157 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         : c
     );
     get().saveToHistory(newContainers);
+    
+    // Update the selected asset ID
     set({ selectedAssetId: newAsset.id });
+    
+    // Also update the layer store to select this asset
+    // We need to import this dynamically to avoid circular dependencies
+    import('./layerStore').then(({ useLayerStore }) => {
+      // Force a sync first to ensure the new asset is in the layer hierarchy
+      useLayerStore.getState().syncWithLayoutStore();
+      // Then select the new asset
+      useLayerStore.getState().selectLayer(newAsset.id);
+    });
+  },
+
+  reorderContainer: (containerId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
+    const state = get();
+    const containers = [...state.containers];
+    const containerIndex = containers.findIndex(c => c.id === containerId);
+    const targetIndex = containers.findIndex(c => c.id === targetId);
+
+    if (containerIndex === -1 || targetIndex === -1) return;
+
+    // Remove the container from its current position
+    const [container] = containers.splice(containerIndex, 1);
+
+    // Update parent relationship if needed
+    if (position === 'inside') {
+      container.parentId = targetId;
+    } else {
+      // If moving to root level, remove parent
+      container.parentId = containers[targetIndex].parentId;
+    }
+
+    // Insert at new position
+    const newIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+    containers.splice(newIndex, 0, container);
+
+    // Save to history and update state
+    state.saveToHistory(containers);
+  },
+
+  updateContainerParent: (containerId: string, newParentId: string | null) => {
+    const state = get();
+    const containers = [...state.containers];
+    const containerIndex = containers.findIndex(c => c.id === containerId);
+
+    if (containerIndex === -1) {
+      console.error('Container not found:', containerId);
+      return;
+    }
+
+    const container = containers[containerIndex];
+    const oldParentId = container.parentId;
+    console.log('=== Updating Container Parent ===', {
+      containerId,
+      oldParentId,
+      newParentId,
+      containerBeforeUpdate: {
+        id: container.id,
+        parentId: container.parentId,
+        position: {
+          portrait: container.portrait,
+          landscape: container.landscape
+        }
+      }
+    });
+
+    // Get old parent for position calculations
+    const oldParent = oldParentId ? containers.find(c => c.id === oldParentId) : null;
+    const newParent = newParentId ? containers.find(c => c.id === newParentId) : null;
+
+    // Calculate absolute positions before parent change
+    const absolutePortrait = oldParent ? {
+      x: container.portrait.x + oldParent.portrait.x,
+      y: container.portrait.y + oldParent.portrait.y,
+      width: container.portrait.width,
+      height: container.portrait.height
+    } : container.portrait;
+
+    const absoluteLandscape = oldParent ? {
+      x: container.landscape.x + oldParent.landscape.x,
+      y: container.landscape.y + oldParent.landscape.y,
+      width: container.landscape.width,
+      height: container.landscape.height
+    } : container.landscape;
+
+    // Calculate new relative positions
+    const newPortrait = newParent ? {
+      ...container.portrait,
+      x: absolutePortrait.x - newParent.portrait.x,
+      y: absolutePortrait.y - newParent.portrait.y
+    } : absolutePortrait;
+
+    const newLandscape = newParent ? {
+      ...container.landscape,
+      x: absoluteLandscape.x - newParent.landscape.x,
+      y: absoluteLandscape.y - newParent.landscape.y
+    } : absoluteLandscape;
+
+    // Update the container with new parent and positions
+    containers[containerIndex] = {
+      ...container,
+      parentId: newParentId || undefined,
+      portrait: newPortrait,
+      landscape: newLandscape
+    };
+
+    console.log('Container after parent update:', {
+      updatedContainer: {
+        id: containers[containerIndex].id,
+        parentId: containers[containerIndex].parentId,
+        position: {
+          portrait: containers[containerIndex].portrait,
+          landscape: containers[containerIndex].landscape
+        }
+      },
+      allContainers: containers.map(c => ({ id: c.id, parentId: c.parentId }))
+    });
+
+    // Verify no circular references
+    const hasCircularRef = (containerId: string, parentId: string | undefined): boolean => {
+      if (!parentId) return false;
+      if (parentId === containerId) return true;
+      const parent = containers.find(c => c.id === parentId);
+      return parent ? hasCircularRef(containerId, parent.parentId) : false;
+    };
+
+    if (hasCircularRef(containerId, newParentId || undefined)) {
+      console.error('Circular reference detected:', {
+        containerId,
+        newParentId,
+        containers: containers.map(c => ({ id: c.id, parentId: c.parentId }))
+      });
+      return;
+    }
+
+    // Save to history and update state
+    state.saveToHistory(containers);
+    console.log('Saved updated containers to history');
+
+    // Verify final state
+    const finalContainer = containers.find(c => c.id === containerId);
+    console.log('Final container state:', {
+      container: {
+        id: finalContainer?.id,
+        parentId: finalContainer?.parentId,
+        position: finalContainer ? {
+          portrait: finalContainer.portrait,
+          landscape: finalContainer.landscape
+        } : null
+      }
+    });
   },
 }));

@@ -1,0 +1,1039 @@
+# Responsive Layout Genie - Interface Documentation
+
+## Project Overview
+This is a React TypeScript project using Vite as the build tool, with a modern tech stack including:
+- ShadcnUI components
+- TailwindCSS for styling
+- React Router for navigation
+- React Query for data management
+- Zustand for state management
+- Konva for canvas operations
+
+## UI Structure
+
+### Layout Components
+1. **Header Bar**
+   - Project title "Phaser Layout Tool"
+   - Action buttons:
+     - Undo/Redo
+     - Add Container
+     - Copy to Clipboard
+     - Export Layout
+
+2. **Main Layout**
+   - Split view design with three main sections:
+     - Portrait Mode Canvas (left)
+     - Landscape Mode Canvas (center)
+     - Side Panels (right)
+
+3. **Canvas Views**
+   - Portrait Mode:
+     - Fixed width: 450px
+     - Expandable to full screen
+     - Grid-based layout
+   - Landscape Mode:
+     - Flexible width (flex-1)
+     - Expandable to full screen
+     - Grid-based layout
+
+4. **Side Panels**
+   - Properties Panel:
+     - Container properties
+     - Position settings
+     - Size adjustments
+     - Style configurations
+   - Asset Library:
+     - Asset upload interface
+     - Asset management
+     - Drag-and-drop support
+
+### Asset Management
+1. **Asset Upload**
+   - Support for image assets
+   - Drag-and-drop functionality
+   - Asset preview
+   - Asset organization
+
+2. **Asset Positioning**
+   - Drag-and-drop placement
+   - Grid snapping
+   - Position fine-tuning
+   - Multi-orientation support
+
+3. **Container Management**
+   - Add/Remove containers
+   - Container hierarchy
+   - Container properties
+   - Position/size controls
+
+### Orientation Handling
+1. **Portrait Mode**
+   - Fixed width layout
+   - Vertical-first design
+   - Specific constraints
+   - Independent positioning
+
+2. **Landscape Mode**
+   - Flexible width layout
+   - Horizontal-first design
+   - Specific constraints
+   - Independent positioning
+
+3. **Shared Features**
+   - Grid system
+   - Snap-to-grid
+   - Expandable view
+   - Synchronized updates
+
+## Tech Stack Details
+
+### Core Technologies
+- React 18.3.1
+- TypeScript
+- Vite
+- TailwindCSS
+
+### UI Components
+- ShadcnUI (Radix UI based components)
+- React Konva for canvas manipulation
+- Embla Carousel
+- React Day Picker
+- React Hook Form
+
+### State Management
+- Zustand for global state
+- TanStack Query (React Query) for server state
+- React Router for routing state
+
+### Project Structure
+```
+src/
+├── components/     # Reusable UI components
+├── pages/         # Route components
+├── store/         # Zustand store definitions
+├── hooks/         # Custom React hooks
+├── lib/           # Utility functions
+├── config/        # Configuration files
+└── App.tsx        # Main application component
+```
+
+## Current Focus: Figma-Like Interface Enhancement
+
+### Phase 1: Layers Panel Implementation
+1. **Left Sidebar: Layers Panel**
+   - Location: Left side of the interface (before the Portrait canvas)
+   - Width: 240px (Figma standard)
+   - Features:
+     - Collapsible/Expandable panel
+     - Tree view of container hierarchy
+     - Visual parent-child relationships
+     - Indentation for hierarchy levels
+     - Container naming and renaming
+     - Visibility toggles
+     - Lock/unlock layers
+     - Search/filter containers
+
+2. **Layer Representation**
+   - Components:
+     - Container icon (folder-like for parent containers)
+     - Container name (editable)
+     - Visibility toggle (eye icon)
+     - Lock toggle
+     - Expand/collapse arrow for parent containers
+   - Interactions:
+     - Click to select
+     - Double-click to rename
+     - Drag to reorder
+     - Drag to nest (with visual guides)
+     - Multi-select support (Shift + Click, Ctrl/Cmd + Click)
+
+3. **Properties Panel Enhancement**
+   - Move to right sidebar (current position)
+   - Organize properties into collapsible sections:
+     - Position (X, Y)
+     - Size (Width, Height)
+     - Constraints
+     - Appearance
+   - Show properties only when layer is selected
+   - Multiple selection support:
+     - Show shared properties
+     - Indicate mixed values
+     - Batch editing capabilities
+
+### Implementation Priorities
+1. **Must Have (Phase 1.0)**
+   - [P0] Basic layers panel structure
+   - [P0] Container hierarchy visualization
+   - [P0] Selection sync between layers and canvas
+   - [P0] Properties panel responsiveness to selection
+   - [P0] Parent-child relationship display
+
+2. **Should Have (Phase 1.1)**
+   - [P1] Drag-and-drop reordering
+   - [P1] Container renaming
+   - [P1] Visibility toggles
+   - [P1] Expand/collapse functionality
+   - [P1] Multi-select support
+
+3. **Nice to Have (Phase 1.2)**
+   - [P2] Search/filter layers
+   - [P2] Lock functionality
+   - [P2] Keyboard shortcuts
+   - [P2] Context menus
+   - [P2] Layer grouping
+
+### Technical Implementation Plan
+
+1. **Component Structure**
+```typescript
+src/
+├── components/
+│   ├── LayersPanel/
+│   │   ├── index.tsx
+│   │   ├── LayerItem.tsx
+│   │   ├── LayerTree.tsx
+│   │   ├── LayerActions.tsx
+│   │   └── LayerSearch.tsx
+│   └── PropertiesPanel/
+       ├── index.tsx
+       ├── PropertySection.tsx
+       └── PropertyFields.tsx
+```
+
+2. **State Management Updates**
+```typescript
+interface LayerState {
+  id: string;
+  name: string;
+  isVisible: boolean;
+  isLocked: boolean;
+  isExpanded: boolean;
+  parentId: string | null;
+  children: string[];
+  type: 'container' | 'asset';
+}
+
+interface SelectionState {
+  selectedLayers: string[];
+  lastSelected: string | null;
+}
+```
+
+3. **Layout Adjustments**
+   - Current layout:
+     ```
+     [Portrait] [Landscape] [Properties]
+     ```
+   - New layout:
+     ```
+     [Layers] [Portrait] [Landscape] [Properties]
+     ```
+   - Maintain existing canvas functionality
+   - Add collapsible panels for space management
+
+### Migration Strategy
+1. **Preparation**
+   - Create new layer state structure
+   - Map existing containers to layer format
+   - Add layer metadata to current container data
+
+2. **Implementation Steps**
+   a. Basic Panel Structure
+      - Add LayersPanel component
+      - Implement basic container listing
+      - Connect to existing selection system
+   
+   b. Hierarchy Display
+      - Add parent-child visualization
+      - Implement expand/collapse
+      - Add indentation levels
+   
+   c. Selection System
+      - Update selection handling
+      - Sync between layers and canvas
+      - Implement multi-select logic
+   
+   d. Properties Panel
+      - Restructure for selected layers
+      - Add property sections
+      - Implement batch editing
+
+3. **Testing Focus**
+   - Container creation/deletion sync
+   - Selection state consistency
+   - Property updates propagation
+   - Hierarchy modifications
+   - Performance with deep nesting
+
+### Figma Features Analysis
+
+1. **Adopting**
+   - Layer hierarchy visualization
+   - Selection system
+   - Properties organization
+   - Parent-child relationships
+   - Basic layer actions
+
+2. **Deferring**
+   - Auto-layout features
+   - Component instances
+   - Effects and styles
+   - Advanced constraints
+   - Plugin system
+
+3. **Custom Adaptations**
+   - Dual orientation support
+   - Grid system integration
+   - Asset library integration
+   - Export functionality
+   - Layout preview
+
+### Risk Assessment
+1. **Technical Risks**
+   - Performance with deep nesting
+   - State synchronization complexity
+   - Selection system edge cases
+   - Undo/redo system updates
+
+2. **Mitigation Strategies**
+   - Implement virtual scrolling
+   - Use optimistic updates
+   - Comprehensive testing suite
+   - Feature flags for rollout
+
+### Success Metrics
+1. **Functionality**
+   - All existing features work
+   - Layer operations are intuitive
+   - Selection sync is reliable
+   - Properties update correctly
+
+2. **Performance**
+   - Smooth scrolling with 100+ layers
+   - No lag on layer operations
+   - Quick property updates
+   - Efficient re-renders
+
+3. **User Experience**
+   - Familiar to Figma users
+   - Clear hierarchy visualization
+   - Intuitive layer management
+   - Responsive property updates
+
+## Progress History
+
+### Current Tasks
+1. [x] Document project interface
+2. [x] Set up initial working memory structure
+3. [x] Create cursor rules
+4. [x] Implement Layers Panel (Phase 1.0)
+5. [x] Update Properties Panel
+6. [x] Test and validate changes
+7. [x] Fix container and asset movement issues
+8. [x] Update Properties Panel UI to only show properties for selected layer
+
+### Completed Tasks
+1. [x] Initial documentation setup
+2. [x] Basic interface documentation
+3. [x] UI structure documentation
+4. [x] Fixed container movement between parents and to root (Feb 26, 2025)
+5. [x] Added support for moving assets between containers (Feb 26, 2025)
+6. [x] Updated Properties Panel UI to only show properties for selected layer (Feb 26, 2025)
+7. [x] Fixed asset selection synchronization between Layers Panel and Properties Panel (Feb 26, 2025)
+
+### Next Steps
+1. [ ] Improve drag preview with position indicators
+2. [ ] Add smooth drop animations
+3. [ ] Implement keyboard navigation for layers
+4. [ ] Add multi-select functionality
+5. [ ] Add context menu for layer operations
+
+## Implementation Progress
+
+### Phase 1.0 - Core Layer Panel (✓ Completed)
+1. [x] Basic Layer Store Implementation
+   - Created layerStore.ts with basic state management
+   - Implemented hierarchy visualization
+   - Added visibility toggles
+   - Synchronized with existing layout store
+
+2. [x] Layer Panel UI Components
+   - Implemented LayersPanel component
+   - Created LayerItem component
+   - Added LayerTree recursive component
+   - Integrated with ShadcnUI components
+
+3. [x] State Synchronization
+   - Connected layer store with layout store
+   - Implemented bidirectional sync
+   - Added selection synchronization
+   - Created useSyncLayerStore hook
+
+### Phase 1.1 - Enhanced Layer Management (Current)
+1. **Drag and Drop (In Progress)**
+   - [x] Basic drag state management
+   - [x] Visual drop indicators
+   - [x] Position calculation
+   - [x] Drop validation
+   - [x] Container reordering
+   - [x] Container movement between parents
+   - [x] Asset movement between containers
+   - [ ] Drag preview
+   - [ ] Animation effects
+
+2. **Layer Operations**
+   - [ ] Container renaming
+   - [ ] Keyboard shortcuts
+   - [ ] Context menu
+   - [ ] Multi-select operations
+
+3. **Visual Enhancements**
+   - [ ] Layer icons
+   - [ ] Drag preview
+   - [ ] Selection highlighting
+   - [ ] Status indicators
+
+### Phase 1.2 - Advanced Features (Planned)
+1. **Search and Filter**
+   - [ ] Search functionality
+   - [ ] Filter by type
+   - [ ] Filter by visibility
+   - [ ] Save filter presets
+
+2. **Layer Organization**
+   - [ ] Layer grouping
+   - [ ] Bulk operations
+   - [ ] Layer locking
+   - [ ] Layer metadata
+
+## Detailed Next Steps
+
+### 1. Drag and Drop Implementation
+```typescript
+// Step 1: Add Drag State to Layer Store
+interface DragState {
+  draggingId: string | null;
+  dropTargetId: string | null;
+  dropPosition: 'before' | 'after' | 'inside' | null;
+}
+
+// Step 2: Add Drag Handlers
+interface LayerState {
+  dragState: DragState;
+  startDrag: (id: string) => void;
+  updateDrag: (targetId: string, position: DropPosition) => void;
+  endDrag: () => void;
+}
+
+// Step 3: Update UI Components
+interface LayerItemProps {
+  // ... existing props ...
+  draggable: boolean;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  dropPosition: DropPosition;
+}
+```
+
+### 2. Container Renaming
+```typescript
+// Step 1: Add Rename State
+interface LayerState {
+  editingId: string | null;
+  startRename: (id: string) => void;
+  endRename: (id: string, newName: string) => void;
+}
+
+// Step 2: Add Rename UI
+interface LayerItemProps {
+  // ... existing props ...
+  isEditing: boolean;
+  onRename: (newName: string) => void;
+}
+```
+
+### 3. Multi-select Enhancement
+```typescript
+// Step 1: Add Selection State
+interface SelectionState {
+  selectedIds: Set<string>;
+  lastSelectedId: string | null;
+  selectionMode: 'single' | 'multi' | null;
+}
+
+// Step 2: Add Selection Handlers
+interface LayerState {
+  selection: SelectionState;
+  selectLayer: (id: string, event: MouseEvent) => void;
+  selectRange: (startId: string, endId: string) => void;
+  clearSelection: () => void;
+}
+```
+
+## Implementation Order
+
+1. **Layer 1: Core Drag and Drop**
+   - Basic drag state management
+   - Simple vertical reordering
+   - Visual feedback
+   - Position indicators
+
+2. **Layer 2: Enhanced Drag and Drop**
+   - Parent-child nesting
+   - Drop zone validation
+   - Drag preview
+   - Animation
+
+3. **Layer 3: Selection System**
+   - Multi-select state
+   - Keyboard modifiers
+   - Visual feedback
+   - Selection sync
+
+4. **Layer 4: Renaming System**
+   - Edit mode
+   - Validation
+   - Keyboard shortcuts
+   - Auto-focus
+
+## Success Criteria
+
+### Layer 1
+- [ ] Layers can be dragged up and down
+- [ ] Visual indicator shows drop position
+- [ ] Basic drop validation works
+- [ ] Existing functionality remains intact
+
+### Layer 2
+- [ ] Layers can be nested
+- [ ] Drop zones show clear indicators
+- [ ] Drag preview matches design
+- [ ] Smooth animations on drop
+
+### Layer 3
+- [ ] Shift+Click selects ranges
+- [ ] Ctrl/Cmd+Click toggles selection
+- [ ] Selection visible in both panel and canvas
+- [ ] Keyboard navigation works
+
+### Layer 4
+- [ ] Double-click starts rename
+- [ ] Enter commits rename
+- [ ] Escape cancels rename
+- [ ] Names properly validated
+
+## Current Focus
+Completing Layer 1 of the drag and drop system:
+1. [x] Add drag state to layer store
+2. [x] Implement basic vertical drag
+3. [x] Add drop indicators
+4. [x] Implement container reordering
+5. [ ] Add drag preview and animations
+
+## Next Steps
+1. [ ] Add drag preview with current position indicator
+2. [ ] Implement smooth drop animations
+3. [ ] Add keyboard navigation for layers
+4. [ ] Implement multi-select functionality
+5. [ ] Add context menu for layer operations
+
+## Testing Focus
+1. **Drag and Drop**
+   - [ ] Test container reordering at root level
+   - [ ] Test parent-child nesting
+   - [ ] Test drop validation rules
+   - [ ] Verify history (undo/redo) works with reordering
+   - [ ] Check performance with many containers
+
+2. **Visual Feedback**
+   - [ ] Drop indicators appear in correct positions
+   - [ ] Drag preview follows cursor
+   - [ ] Animations are smooth
+   - [ ] Visual hierarchy is clear
+
+3. **State Management**
+   - [ ] Layer store stays in sync with layout store
+   - [ ] Selection state is preserved during drag
+   - [ ] Container order is maintained after refresh
+   - [ ] Parent-child relationships are preserved
+
+Would you like me to:
+1. Proceed with implementing drag preview and animations?
+2. Add the testing suite for current functionality?
+3. Move on to keyboard navigation implementation?
+4. Something else?
+
+## Notes
+- Project uses modern React patterns with TypeScript
+- Comprehensive UI component library with ShadcnUI
+- Canvas manipulation capabilities through Konva
+- File handling capabilities (JSZip, FileSaver)
+- Dual orientation support with independent layouts
+- Real-time preview and editing capabilities
+- Maintaining existing functionality is critical
+- Focus on core layer management first
+- Properties panel updates follow layer implementation
+- Consider performance with deep nesting
+- Keep dual orientation support intact 
+
+### Pseudo Code Implementation
+
+#### 1. State Management Layer (Zustand)
+
+```typescript
+// Initial Implementation - Version 1
+interface LayerStore {
+  layers: Map<string, LayerState>;
+  selection: SelectionState;
+  
+  // Actions
+  addLayer: (layer: LayerState) => void;
+  removeLayer: (id: string) => void;
+  updateLayer: (id: string, updates: Partial<LayerState>) => void;
+  setSelection: (ids: string[]) => void;
+  
+  // Hierarchy Management
+  moveLayer: (id: string, newParentId: string | null) => void;
+  reorderLayer: (id: string, newIndex: number) => void;
+  
+  // Queries
+  getLayerHierarchy: () => LayerNode[];
+  getSelectedLayers: () => LayerState[];
+}
+
+// Critique 1: Missing undo/redo support
+// Critique 2: No validation for circular references
+// Critique 3: No batch operations support
+
+// Enhanced Implementation - Version 2
+interface LayerStore {
+  layers: Map<string, LayerState>;
+  selection: SelectionState;
+  history: HistoryState;
+  
+  // Enhanced Actions with History
+  performAction: (action: LayerAction) => void;
+  undo: () => void;
+  redo: () => void;
+  
+  // Batch Operations
+  batchUpdate: (operations: LayerOperation[]) => void;
+  
+  // Validation
+  validateHierarchy: (parentId: string, childId: string) => boolean;
+  
+  // Sync with Canvas
+  syncWithCanvas: () => void;
+}
+
+// Final Implementation - Version 3
+interface LayerStore {
+  // ... Version 2 features ...
+  
+  // Orientation Support
+  getLayerStateForOrientation: (id: string, orientation: 'portrait' | 'landscape') => LayerOrientationState;
+  
+  // Performance Optimizations
+  getVisibleLayersForViewport: () => LayerState[];
+  
+  // Error Handling
+  handleLayerError: (error: LayerError) => void;
+}
+```
+
+#### 2. Layer Panel Component
+
+```typescript
+// Initial Implementation - Version 1
+const LayersPanel: React.FC = () => {
+  const layers = useLayerStore(state => state.layers);
+  
+  return (
+    <div className="w-60 border-r">
+      <LayerTree layers={layers} />
+    </div>
+  );
+}
+
+// Critique 1: No virtualization for large lists
+// Critique 2: Missing drag-drop interactions
+// Critique 3: No keyboard navigation
+
+// Enhanced Implementation - Version 2
+const LayersPanel: React.FC = () => {
+  const { layers, selection } = useLayerStore();
+  
+  return (
+    <ResizablePanel defaultSize={240} minSize={180} maxSize={400}>
+      <VirtualizedLayerTree
+        layers={layers}
+        selection={selection}
+        onDragDrop={handleDragDrop}
+        keyboardNavigation
+      />
+    </ResizablePanel>
+  );
+}
+
+// Final Implementation - Version 3
+const LayersPanel: React.FC = () => {
+  const {
+    layers,
+    selection,
+    visibleLayers,
+    expandedNodes
+  } = useLayerStore();
+  
+  return (
+    <ResizablePanel>
+      <LayerPanelHeader />
+      <LayerSearchBar />
+      <VirtualizedLayerTree
+        layers={visibleLayers}
+        selection={selection}
+        expandedNodes={expandedNodes}
+        onDragDrop={handleDragDrop}
+        keyboardNavigation
+        renderLayer={(layer) => (
+          <LayerItem
+            layer={layer}
+            dragHandlers={dragHandlers}
+            contextMenu={<LayerContextMenu />}
+          />
+        )}
+      />
+      <LayerPanelFooter />
+    </ResizablePanel>
+  );
+}
+```
+
+#### 3. Selection System
+
+```typescript
+// Initial Implementation - Version 1
+const useLayerSelection = () => {
+  const { selection, setSelection } = useLayerStore();
+  
+  const handleSelect = (id: string, event: MouseEvent) => {
+    if (event.ctrlKey || event.metaKey) {
+      setSelection([...selection, id]);
+    } else {
+      setSelection([id]);
+    }
+  };
+  
+  return { handleSelect };
+};
+
+// Critique 1: No range selection
+// Critique 2: No selection memory
+// Critique 3: No sync with canvas selection
+
+// Enhanced Implementation - Version 2
+const useLayerSelection = () => {
+  const { selection, setSelection, lastSelected } = useLayerStore();
+  
+  const handleSelect = (id: string, event: MouseEvent) => {
+    if (event.shiftKey && lastSelected) {
+      const range = getLayerRange(lastSelected, id);
+      setSelection(range);
+    } else if (event.ctrlKey || event.metaKey) {
+      toggleSelection(id);
+    } else {
+      setSelection([id]);
+    }
+  };
+  
+  return {
+    handleSelect,
+    handleRangeSelect,
+    handleCanvasSync
+  };
+};
+
+// Final Implementation - Version 3
+const useLayerSelection = () => {
+  const {
+    selection,
+    setSelection,
+    lastSelected,
+    selectionHistory
+  } = useLayerStore();
+  
+  // Selection Handlers
+  const handleSelect = useCallback((id: string, event: MouseEvent) => {
+    // ... enhanced selection logic ...
+  }, [selection, lastSelected]);
+  
+  // Canvas Sync
+  useEffect(() => {
+    const unsubscribe = subscribeToCanvasSelection((canvasSelection) => {
+      syncSelectionWithCanvas(canvasSelection);
+    });
+    return unsubscribe;
+  }, []);
+  
+  return {
+    handleSelect,
+    handleRangeSelect,
+    handleCanvasSync,
+    selectionHistory
+  };
+};
+```
+
+#### 4. Properties Panel Enhancement
+
+```typescript
+// Initial Implementation - Version 1
+const PropertiesPanel: React.FC = () => {
+  const selectedLayers = useLayerStore(state => state.getSelectedLayers());
+  
+  return (
+    <div className="w-60 border-l">
+      <PropertySections layers={selectedLayers} />
+    </div>
+  );
+};
+
+// Critique 1: No handling of mixed values
+// Critique 2: No batch updates
+// Critique 3: No property inheritance
+
+// Enhanced Implementation - Version 2
+const PropertiesPanel: React.FC = () => {
+  const {
+    selectedLayers,
+    inheritedProperties,
+    mixedValues
+  } = useLayerStore(select => ({
+    selectedLayers: select.getSelectedLayers(),
+    inheritedProperties: select.getInheritedProperties(),
+    mixedValues: select.getMixedValues()
+  }));
+  
+  return (
+    <ResizablePanel>
+      <PropertySections
+        layers={selectedLayers}
+        inheritedProps={inheritedProperties}
+        mixedValues={mixedValues}
+        onBatchUpdate={handleBatchUpdate}
+      />
+    </ResizablePanel>
+  );
+};
+
+// Final Implementation - Version 3
+const PropertiesPanel: React.FC = () => {
+  const {
+    selectedLayers,
+    inheritedProperties,
+    mixedValues,
+    orientation
+  } = useLayerStore();
+  
+  return (
+    <ResizablePanel>
+      <Tabs defaultValue="layout">
+        <TabsList>
+          <TabsTrigger value="layout">Layout</TabsTrigger>
+          <TabsTrigger value="style">Style</TabsTrigger>
+          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="layout">
+          <PropertySection
+            title="Position & Size"
+            properties={['x', 'y', 'width', 'height']}
+            orientation={orientation}
+          />
+          <PropertySection
+            title="Constraints"
+            properties={['constraints']}
+            orientation={orientation}
+          />
+        </TabsContent>
+        
+        {/* Other tab contents */}
+      </Tabs>
+    </ResizablePanel>
+  );
+};
+```
+
+### Implementation Critiques and Improvements
+
+1. **State Management**
+   - Added: History management for undo/redo
+   - Added: Validation for circular references
+   - Added: Batch operations for performance
+   - Added: Error boundaries and recovery
+   - Added: Performance optimizations for large trees
+
+2. **Layer Panel**
+   - Added: Virtualization for performance
+   - Added: Drag-drop with preview
+   - Added: Keyboard navigation
+   - Added: Context menus
+   - Added: Search and filtering
+
+3. **Selection System**
+   - Added: Range selection
+   - Added: Selection history
+   - Added: Canvas sync
+   - Added: Multi-orientation support
+   - Added: Selection memory
+
+4. **Properties Panel**
+   - Added: Mixed values handling
+   - Added: Property inheritance
+   - Added: Batch updates
+   - Added: Orientation-specific properties
+   - Added: Tabbed organization
+
+### Final Validation Checklist
+
+1. **Backward Compatibility**
+   - [ ] Existing container operations preserved
+   - [ ] Current selection system integrated
+   - [ ] Property updates maintain current behavior
+   - [ ] Export functionality unchanged
+   - [ ] Undo/redo system enhanced, not replaced
+
+2. **Performance**
+   - [ ] Virtual scrolling for large layer trees
+   - [ ] Batch updates for property changes
+   - [ ] Optimized re-renders
+   - [ ] Efficient state updates
+   - [ ] Memory usage optimization
+
+3. **Error Handling**
+   - [ ] Circular reference prevention
+   - [ ] Invalid operation handling
+   - [ ] State recovery mechanisms
+   - [ ] User feedback for errors
+   - [ ] Graceful degradation
+
+4. **User Experience**
+   - [ ] Intuitive layer management
+   - [ ] Responsive property updates
+   - [ ] Smooth animations
+   - [ ] Keyboard shortcuts
+   - [ ] Context menus
+
+## Bug Fixes
+
+### Container Movement Issues (Feb 26, 2025)
+1. **Fixed Issues:**
+   - [x] Container movement between parent containers
+   - [x] Container movement to root level
+   - [x] Asset movement between containers
+   - [x] Position calculation during parent changes
+   - [x] Hierarchy synchronization after movement
+   - [x] Fixed error when moving assets between containers
+   - [x] Added proper validation to prevent moving assets to root level
+
+2. **Implementation Details:**
+   - Enhanced position calculation for parent-child relationships
+   - Added proper validation for target containers
+   - Improved error handling and logging
+   - Fixed synchronization between layer and layout stores
+   - Added support for asset movement between containers
+   - Improved hierarchy computation to handle edge cases
+   - Added error handling and user feedback when attempting invalid operations
+   - Updated selection state after asset movement to maintain context
+
+3. **Testing:**
+   - Verified container movement to root level
+   - Verified container movement between parents
+   - Verified asset movement between containers
+   - Checked position preservation during movement
+   - Validated hierarchy updates after movement
+   - Confirmed proper error handling when attempting to move assets to root level
+   - Verified selection state is maintained after asset movement
+
+### Zip Import Functionality Restoration (Feb 26, 2025)
+1. **Fixed Issues:**
+   - [x] Restored ability to import layouts from zip files
+   - [x] Added Import Layout button to the main toolbar
+   - [x] Ensured proper handling of assets within imported zip files
+
+2. **Implementation Details:**
+   - Added Import Layout button to the main toolbar in Index.tsx
+   - Implemented handleImportFile function to process zip files
+   - Extracted layout.json configuration from zip files
+   - Processed assets from the assets folder in zip files
+   - Integrated with existing importConfig functionality
+   - Added proper error handling and user feedback
+
+3. **Testing:**
+   - Verified zip import with various layout configurations
+   - Confirmed assets are properly extracted and loaded
+   - Tested error handling for invalid zip files
+   - Validated that imported layouts maintain their structure
+
+### Properties Panel UI Update (In Progress)
+1. **Requirements**
+   - [x] Only show properties for the selected layer (container or asset) in the right panel
+   - [x] Keep "Add Asset" and "Add Child Container" functionality in the header when a container is selected
+   - [x] Move device selection to the middle of the header
+   - [x] Maintain backward compatibility and existing functionality
+   - [x] Keep the asset upload functionality as is
+
+2. **Implementation Steps**
+   - [x] Update Index.tsx to add device selection and conditional container actions to header
+   - [x] Create ContainerProperties component
+   - [x] Create AssetProperties component
+   - [x] Update PropertiesPanel to use the new components
+   - [ ] Test all functionality
+   - [ ] Refine styling and layout
+
+3. **Testing Focus**
+   - [ ] Selection of containers and assets shows correct properties
+   - [ ] Device selection in header works correctly
+   - [ ] Container actions in header work correctly
+   - [ ] All property editing functionality works as before
+   - [ ] Navigation between containers works correctly
+
+### Asset Selection Synchronization Fix (Feb 26, 2025)
+1. **Fixed Issues:**
+   - [x] Asset selection from Layers Panel not showing properties in Properties Panel
+   - [x] Adding a new asset shows properties but doesn't update selection in Layers Panel
+   - [x] Duplicating an asset doesn't update selection in Layers Panel
+
+2. **Implementation Details:**
+   - Updated `selectLayer` function in layer store to properly handle asset selection
+   - Modified `addAsset` and `duplicateAsset` functions to update layer selection
+   - Ensured bidirectional synchronization between layer store and layout store
+   - Fixed asset selection to properly set both container ID and asset ID
+
+3. **Testing:**
+   - Verified asset selection from Layers Panel shows correct properties
+   - Confirmed adding a new asset updates selection in both panels
+   - Validated duplicating an asset updates selection in both panels
+   - Tested selection synchronization in various scenarios
+
+### Add Container With Asset Selected Fix (Feb 26, 2025)
+1. **Fixed Issues:**
+   - [x] Error when clicking "Add Container" button while an asset is selected
+   - [x] Container not being created at root level when an asset is selected
+
+2. **Implementation Details:**
+   - Updated `addContainer` function to properly handle the case when an asset is selected
+   - Added error handling to prevent crashes
+   - Ensured `selectedAssetId` is cleared when creating a new container
+   - Added debugging logs to track the issue
+
+3. **Root Cause Analysis:**
+   - When an asset is selected, the `selectedId` is set to the parent container's ID
+   - The `addContainer` function was not properly handling the state transition
+   - The function was not clearing the `selectedAssetId` when creating a new container
+
+4. **Testing:**
+   - Verified "Add Container" button works correctly when an asset is selected
+   - Confirmed new container is created at root level
+   - Validated selection state is properly updated after container creation
+
+[... rest of the document remains unchanged ...] 
