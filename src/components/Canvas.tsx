@@ -1,9 +1,10 @@
-import { Stage, Layer, Rect, Group, Transformer, Image, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Group, Transformer, Image, Circle, Line } from 'react-konva';
 import { useLayoutStore, Container, Asset, AssetTransform } from '../store/layoutStore';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { devices } from '../config/devices';
 import useImage from 'use-image';
+import Konva from 'konva';
 
 // Component to load a single image
 const ImageLoader = ({ 
@@ -28,11 +29,17 @@ const ImageLoader = ({
 
 interface CanvasProps {
   orientation: 'portrait' | 'landscape';
+  isInfinite?: boolean;
+  transform?: {
+    x: number;
+    y: number;
+    scale: number;
+  };
 }
 
 const GRID_SIZE = 20;
 
-export const Canvas = ({ orientation }: CanvasProps) => {
+export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
   const { 
     containers, 
     selectedId, 
@@ -47,13 +54,15 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     setActiveOrientation
   } = useLayoutStore();
   
-  const transformerRef = useRef<any>(null);
-  const selectedShapeRef = useRef<any>(null);
-  const selectedAssetRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const transformerRef = useRef<Konva.Transformer>(null);
+  const selectedShapeRef = useRef<Konva.Rect>(null);
+  const selectedAssetRef = useRef<Konva.Image>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
   const assetDimensionsRef = useRef<Record<string, { width: number; height: number }>>({});
   const isActiveCanvasRef = useRef(false);
-  const stageRef = useRef<any>(null);
+  const stageRef = useRef<Konva.Stage>(null);
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
   // Track active canvas state for visual feedback
   const [isActive, setIsActive] = useState(activeOrientation === orientation);
@@ -61,6 +70,59 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   const device = devices[selectedDevice];
   const width = orientation === 'portrait' ? device.width : device.height;
   const height = orientation === 'portrait' ? device.height : device.width;
+
+  // Track container dimensions with ResizeObserver
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        const { width, height } = entry.contentRect;
+        console.log('[INFINITE_CANVAS] Container resized:', { width, height });
+        setContainerDimensions({ width, height });
+      }
+    });
+    
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Calculate stage dimensions based on container size or device size
+  const [stageWidth, setStageWidth] = useState(width);
+  const [stageHeight, setStageHeight] = useState(height);
+
+  useEffect(() => {
+    if (isInfinite && containerDimensions.width > 0 && containerDimensions.height > 0) {
+      // Calculate stage size based on:
+      // 1. Container size * 1.5 (to ensure some extra space for panning)
+      // 2. Device size * 2 (minimum working space)
+      const newStageWidth = Math.max(containerDimensions.width * 1.5, width * 2);
+      const newStageHeight = Math.max(containerDimensions.height * 1.5, height * 2);
+      
+      console.log('[INFINITE_CANVAS] Stage size calculation:', {
+        containerWidth: containerDimensions.width,
+        containerHeight: containerDimensions.height,
+        deviceWidth: width,
+        deviceHeight: height,
+        isInfinite,
+        mode: 'infinite',
+        newStageWidth,
+        newStageHeight
+      });
+      
+      setStageWidth(newStageWidth);
+      setStageHeight(newStageHeight);
+    } else if (!isInfinite) {
+      // Normal mode - unchanged
+      setStageWidth(width);
+      setStageHeight(height);
+    }
+  }, [isInfinite, width, height, containerDimensions]);
+
+  // Center coordinates for infinite mode - adjust to account for device size
+  const centerX = isInfinite ? (stageWidth - width) / 2 : 0;
+  const centerY = isInfinite ? (stageHeight - height) / 2 : 0;
 
   // Create a map of all images used in containers
   const imageIds = useMemo(() => {
@@ -131,7 +193,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         
         const asset = container.assets[selectedAssetId];
         const transform = asset[orientation];
-        let updates: Partial<AssetTransform> = { ...transform };
+        const updates: Partial<AssetTransform> = { ...transform };
         
         switch (e.key) {
           case 'ArrowLeft':
@@ -458,7 +520,7 @@ export const Canvas = ({ orientation }: CanvasProps) => {
       };
     };
 
-    const calculateRelativePosition = (node: any, referenceId: string) => {
+    const calculateRelativePosition = (node: Konva.Node, referenceId: string) => {
       const refAsset = container.assets[referenceId];
       if (!refAsset || !refAsset.key || !imageElementsRef.current[refAsset.key]) return null;
 
@@ -486,8 +548,8 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     const origin = calculateOriginPoint(asset.id, transform);
     if (!origin) return null;
 
-    let originX = origin.x;
-    let originY = origin.y;
+    const originX = origin.x;
+    const originY = origin.y;
 
     const isSelected = selectedId === containerId && selectedAssetId === asset.id;
 
@@ -755,7 +817,14 @@ export const Canvas = ({ orientation }: CanvasProps) => {
   }, [setActiveOrientation]);
 
   // Update active canvas on stage interaction
-  const handleStageClick = (e: any) => {
+  const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+    console.log('[INFINITE_CANVAS] Stage click:', {
+      target: e.target,
+      currentTarget: e.currentTarget,
+      targetType: e.target.getType(),
+      targetName: e.target.name(),
+    });
+    
     e.cancelBubble = true;
     
     // Set all canvases as inactive first
@@ -797,8 +866,26 @@ export const Canvas = ({ orientation }: CanvasProps) => {
     setActiveOrientation(orientation);
   };
 
+  useEffect(() => {
+    if (transform) {
+      console.log('[INFINITE_CANVAS] Transform updated:', transform);
+    }
+  }, [transform]);
+
+  useEffect(() => {
+    console.log('[INFINITE_CANVAS] Dimensions:', {
+      deviceWidth: width,
+      deviceHeight: height,
+      stageWidth,
+      stageHeight,
+      containerWidth: containerRef?.current?.offsetWidth,
+      containerHeight: containerRef?.current?.offsetHeight,
+      isInfinite
+    });
+  }, [width, height, stageWidth, stageHeight, isInfinite]);
+
   return (
-    <div className="relative">
+    <div className="relative h-full" ref={containerRef}>
       {/* Load all images */}
       {imageIds.map(id => (
         <ImageLoader
@@ -809,68 +896,97 @@ export const Canvas = ({ orientation }: CanvasProps) => {
         />
       ))}
       
-      <div className={`absolute inset-0 rounded-lg overflow-hidden border-2 transition-colors duration-200 ${
+      <div className={`absolute inset-0 rounded-lg border-2 transition-colors duration-200 ${
         isActive ? 'border-editor-accent' : 'border-editor-grid'
       }`} style={{
-        width: width + 44,
-        height: height + 88,
+        width: isInfinite ? '100%' : width + 44,
+        height: isInfinite ? '100%' : height + 88,
         background: '#1a1b26',
-        borderRadius: '40px',
+        borderRadius: isInfinite ? '0' : '40px',
+        overflow: 'hidden'
       }}>
-        <div className="absolute left-1/2 -translate-x-1/2 w-32 h-7 bg-editor-grid rounded-b-2xl" />
+        {!isInfinite && (
+          <div className="absolute left-1/2 -translate-x-1/2 w-32 h-7 bg-editor-grid rounded-b-2xl" />
+        )}
         <Stage
           ref={stageRef}
-          width={width}
-          height={height}
-          className="canvas-stage absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white"
+          width={stageWidth}
+          height={stageHeight}
+          className="canvas-stage absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           onClick={handleStageClick}
           onTap={handleStageClick}
           onMouseDown={handleStageClick}
+          style={{
+            background: '#1a1b26'
+          }}
+          onWheel={(e) => {
+            // Only handle zoom if Ctrl/Cmd is pressed
+            if (e.evt.ctrlKey || e.evt.metaKey) {
+              e.evt.preventDefault();
+            }
+          }}
+          scale={transform ? { x: transform.scale, y: transform.scale } : undefined}
+          x={transform ? transform.x : 0}
+          y={transform ? transform.y : 0}
         >
           <Layer>
             {/* Grid */}
             <Group>
-              {Array.from({ length: Math.ceil(width / GRID_SIZE) }).map((_, i) => (
-                <Rect
+              {Array.from({ length: Math.ceil(stageWidth / GRID_SIZE) }).map((_, i) => (
+                <Line
                   key={`v${i}`}
-                  x={i * GRID_SIZE}
-                  y={0}
-                  width={1}
-                  height={height}
-                  fill="#2f3146"
-                  opacity={0.3}
+                  points={[i * GRID_SIZE, 0, i * GRID_SIZE, stageHeight]}
+                  stroke="#1f2937"
+                  strokeWidth={1}
                 />
               ))}
-              {Array.from({ length: Math.ceil(height / GRID_SIZE) }).map((_, i) => (
-                <Rect
+              {Array.from({ length: Math.ceil(stageHeight / GRID_SIZE) }).map((_, i) => (
+                <Line
                   key={`h${i}`}
-                  x={0}
-                  y={i * GRID_SIZE}
-                  width={width}
-                  height={1}
-                  fill="#2f3146"
-                  opacity={0.3}
+                  points={[0, i * GRID_SIZE, stageWidth, i * GRID_SIZE]}
+                  stroke="#1f2937"
+                  strokeWidth={1}
                 />
               ))}
             </Group>
 
-            {/* Containers */}
-            {containers.map(renderContainer)}
+            {/* Content group with proper transform handling */}
+            <Group 
+              x={centerX} 
+              y={centerY}
+              scaleX={1}
+              scaleY={1}
+            >
+              {/* Containers */}
+              {containers.map(renderContainer)}
 
-            {/* Transformer - will be used for both containers and assets */}
-            {(selectedId || selectedAssetId) && (
-              <Transformer
-                ref={transformerRef}
-                boundBoxFunc={(oldBox, newBox) => {
-                  const minSize = 5;
-                  if (newBox.width < minSize || newBox.height < minSize) {
-                    return oldBox;
-                  }
-                  return newBox;
-                }}
-                keepRatio={selectedAssetId ? containers.find(c => c.id === selectedId)?.assets[selectedAssetId]?.[orientation].maintainAspectRatio : false}
-              />
-            )}
+              {/* Transformer */}
+              {(selectedId || selectedAssetId) && (
+                <Transformer
+                  ref={transformerRef}
+                  boundBoxFunc={(oldBox, newBox) => {
+                    const minSize = 5;
+                    if (newBox.width < minSize || newBox.height < minSize) {
+                      return oldBox;
+                    }
+                    return newBox;
+                  }}
+                  keepRatio={selectedAssetId ? containers.find(c => c.id === selectedId)?.assets[selectedAssetId]?.[orientation].maintainAspectRatio : false}
+                />
+              )}
+
+              {/* Device bounds indicator in infinite mode */}
+              {isInfinite && (
+                <Rect
+                  width={width}
+                  height={height}
+                  stroke="#7aa2f7"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  fill="transparent"
+                />
+              )}
+            </Group>
           </Layer>
         </Stage>
       </div>

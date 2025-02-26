@@ -212,28 +212,26 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       selectedAssetId: get().selectedAssetId
     });
     
-    // If an asset is selected and no parentId is provided, we should create a container at root level
-    // We don't need to do anything special here, just make sure we don't use the selectedId as parentId
-    
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
     console.log('Parent container found:', parent ? { id: parent.id, name: parent.name } : null);
     
-    const parentPos = parent ? parent.portrait : null;
+    const parentPortrait = parent ? parent.portrait : null;
+    const parentLandscape = parent ? parent.landscape : null;
     
     const newContainer: Container = {
       id: crypto.randomUUID(),
       name: `Container ${Date.now()}`,
       portrait: {
-        x: parentPos ? parentPos.width / 2 : 50,
-        y: parentPos ? parentPos.height / 2 : 50,
-        width: parentPos ? parentPos.width * 0.5 : 100,
-        height: parentPos ? parentPos.height * 0.5 : 100,
+        x: parentPortrait ? (parentPortrait.x + parentPortrait.width / 2) : 50,
+        y: parentPortrait ? (parentPortrait.y + parentPortrait.height / 2) : 50,
+        width: parentPortrait ? parentPortrait.width * 0.5 : 100,
+        height: parentPortrait ? parentPortrait.height * 0.5 : 100,
       },
       landscape: {
-        x: parentPos ? parentPos.width / 2 : 50,
-        y: parentPos ? parentPos.height / 2 : 50,
-        width: parentPos ? parentPos.width * 0.5 : 100,
-        height: parentPos ? parentPos.height * 0.5 : 100,
+        x: parentLandscape ? (parentLandscape.x + parentLandscape.width / 2) : 50,
+        y: parentLandscape ? (parentLandscape.y + parentLandscape.height / 2) : 50,
+        width: parentLandscape ? parentLandscape.width * 0.5 : 100,
+        height: parentLandscape ? parentLandscape.height * 0.5 : 100,
       },
       parentId,
       assets: {},

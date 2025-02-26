@@ -1,0 +1,536 @@
+# Responsive Layout Genie - Technical Documentation
+
+## Project Structure
+```
+src/
+├── components/
+│   ├── AssetProperties.tsx    # Asset property editor
+│   ├── ContainerProperties.tsx # Container property editor
+│   ├── PropertiesPanel.tsx    # Main properties panel
+│   ├── LayersPanel/          # Layer hierarchy management
+│   ├── AssetLibrary.tsx      # Asset management
+│   ├── Canvas.tsx            # Main canvas component
+│   ├── CanvasModal.tsx       # Full-screen canvas view
+│   └── ui/                   # Shared UI components
+├── store/
+│   ├── layerStore.ts         # Layer management state
+│   └── layoutStore.ts        # Layout and asset state
+└── config/
+    └── devices.ts            # Device configurations
+```
+
+## Core Components Documentation
+
+### Canvas Component (Canvas.tsx)
+Primary component for layout manipulation in both portrait and landscape modes.
+
+Functions:
+- `ImageLoader({ id, src, onLoad })`
+  - Input: 
+    - id: string - Asset identifier
+    - src: string - Image source URL
+    - onLoad: (id: string, image: HTMLImageElement) => void
+  - Purpose: Handles image asset loading and caching
+  - Output: Loaded image in imageElementsRef
+
+- `Canvas({ orientation })`
+  - Input: orientation ('portrait' | 'landscape')
+  - State Management:
+    - Uses layoutStore for container/asset state
+    - Manages transformer and selection state
+  - Key Functions:
+    - handleKeyDown(e): Keyboard controls for positioning/resizing
+    - handleDragMove(e, id): Container/asset dragging with grid snapping
+    - handleTransform(e, id): Container/asset transformation with constraints
+    - renderAsset(containerId, asset): Asset rendering with proper scaling
+    - renderContainer(container): Container rendering with children
+
+### Layout Store (layoutStore.ts)
+Central state management using Zustand.
+
+Core Interfaces:
+```typescript
+interface Position {
+  x: number;
+  y: number;
+}
+
+interface Size {
+  width: number;
+  height: number;
+}
+
+interface ContainerPosition extends Position, Size {}
+
+interface Asset {
+  id: string;
+  name: string;
+  type: 'image';
+  key: string;
+  portrait: AssetTransform;
+  landscape: AssetTransform;
+}
+
+interface Container {
+  id: string;
+  name: string;
+  portrait: ContainerPosition;
+  landscape: ContainerPosition;
+  parentId?: string;
+  assets: { [key: string]: Asset };
+}
+```
+
+State Management Functions:
+- Container Operations:
+  - addContainer(parentId?: string)
+    - Creates new container with default dimensions
+    - Handles parent-child relationships
+  
+  - updateContainer(id, updates, orientation)
+    - Updates container position/size
+    - Maintains history for undo/redo
+  
+  - deleteContainer(id)
+    - Removes container and its assets
+    - Updates parent-child relationships
+
+- Asset Operations:
+  - addAsset(containerId)
+    - Creates new asset in specified container
+    - Sets up default transforms
+  
+  - updateAsset(containerId, assetId, updates, orientation)
+    - Updates asset transform properties
+    - Handles aspect ratio maintenance
+  
+  - deleteAsset(containerId, assetId)
+    - Removes asset from container
+    - Cleans up references
+
+### Properties Panel Components
+
+1. AssetProperties.tsx
+   - Manages asset-specific properties:
+     - Position (x, y)
+     - Size (width, height)
+     - Scale mode (fit/fill/stretch)
+     - Aspect ratio maintenance
+     - Rotation
+     - Visibility
+
+2. ContainerProperties.tsx
+   - Handles container configuration:
+     - Position and size
+     - Parent-child relationships
+     - Asset management
+     - Name and identification
+
+3. PropertiesPanel.tsx
+   - Main properties interface:
+     - Switches between asset/container properties
+     - Handles selection state
+     - Provides common controls
+
+## Core Functions Documentation
+
+### Canvas Operations
+1. Transform Functions:
+   ```typescript
+   // Handle container/asset dragging
+   const handleDragMove = (e: KonvaEventObject<DragEvent>, id: string) => {
+     // Input: Drag event and target ID
+     // Output: Updated position with grid snapping
+     // Usage: Called during drag operations on containers/assets
+   }
+
+   // Handle resize/rotate operations
+   const handleTransform = (e: KonvaEventObject<Event>, id: string) => {
+     // Input: Transform event and target ID
+     // Output: Updated size/rotation with constraints
+     // Usage: Called during resize/rotate operations
+   }
+
+   // Calculate relative positioning
+   const calculateRelativePosition = (
+     point: Position,
+     container: Container
+   ): Position => {
+     // Input: Point and container reference
+     // Output: Relative position within container
+     // Usage: Used for asset positioning within containers
+   }
+   ```
+
+2. Asset Management:
+   ```typescript
+   // Load and cache images
+   const handleImageLoad = (id: string, image: HTMLImageElement) => {
+     // Input: Asset ID and loaded image
+     // Output: Cached image reference
+     // Usage: Called when assets are loaded
+   }
+
+   // Calculate asset dimensions
+   const calculateAssetDimensions = (
+     asset: Asset,
+     container: Container
+   ): Size => {
+     // Input: Asset and container
+     // Output: Calculated dimensions based on scale mode
+     // Usage: Used when rendering assets
+   }
+   ```
+
+### Store Operations
+1. Container Management:
+   ```typescript
+   // Add new container
+   const addContainer = (parentId?: string) => {
+     // Input: Optional parent container ID
+     // Output: New container with default properties
+     // Usage: Called when creating new containers
+   }
+
+   // Update container properties
+   const updateContainer = (
+     id: string,
+     updates: Partial<ContainerPosition>,
+     orientation: 'portrait' | 'landscape'
+   ) => {
+     // Input: Container ID, updates, and orientation
+     // Output: Updated container state
+     // Usage: Called during container modifications
+   }
+   ```
+
+2. Asset Operations:
+   ```typescript
+   // Add asset to container
+   const addAsset = (containerId: string) => {
+     // Input: Target container ID
+     // Output: New asset with default transforms
+     // Usage: Called when adding assets to containers
+   }
+
+   // Update asset properties
+   const updateAsset = (
+     containerId: string,
+     assetId: string,
+     updates: Partial<AssetTransform>,
+     orientation: 'portrait' | 'landscape'
+   ) => {
+     // Input: Container ID, asset ID, updates, and orientation
+     // Output: Updated asset state
+     // Usage: Called during asset modifications
+   }
+   ```
+
+## Enhanced Root Cause Analysis
+
+### The "5 Whys" Approach
+For each issue, ask "why" repeatedly until the root cause is identified:
+
+1. Layout Issues Example:
+   ```typescript
+   // Issue: Asset not positioning correctly
+   
+   // Why 1: Position calculation seems incorrect
+   console.log('Position calculation:', {
+     input: point,
+     output: calculatedPosition
+   });
+   
+   // Why 2: Parent container transform not applied
+   console.log('Container transform:', {
+     container: parentContainer,
+     transform: parentTransform
+   });
+   
+   // Why 3: Coordinate system mismatch
+   console.log('Coordinate systems:', {
+     global: globalCoords,
+     local: localCoords,
+     parent: parentCoords
+   });
+   
+   // Why 4: Transform order incorrect
+   console.log('Transform order:', {
+     operations: transformOperations,
+     order: operationOrder
+   });
+   
+   // Why 5: Matrix multiplication error
+   console.log('Transform matrices:', {
+     parent: parentMatrix,
+     local: localMatrix,
+     combined: combinedMatrix
+   });
+   ```
+
+2. Performance Issues Example:
+   ```typescript
+   // Issue: Slow rendering
+
+   // Why 1: Frequent rerenders
+   console.time('renderCycle');
+   console.log('Render trigger:', renderTrigger);
+   
+   // Why 2: Heavy component tree
+   console.log('Component tree:', {
+     depth: treeDepth,
+     nodeCount: totalNodes
+   });
+   
+   // Why 3: Unnecessary state updates
+   console.log('State updates:', {
+     previous: previousState,
+     current: currentState,
+     diff: stateDiff
+   });
+   
+   // Why 4: Missing memoization
+   console.log('Memoization check:', {
+     props: componentProps,
+     dependencies: memoizationDeps
+   });
+   
+   // Why 5: Layout thrashing
+   console.log('Layout operations:', {
+     reads: domReads,
+     writes: domWrites,
+     order: operationOrder
+   });
+   ```
+
+## Layer Peeling Development Approach
+
+### 1. Interface Layer (Start Here)
+```typescript
+// Define core interfaces first
+interface Container {
+  id: string;
+  position: Position;
+  size: Size;
+}
+
+interface Asset {
+  id: string;
+  transform: Transform;
+}
+
+// Define function signatures
+interface ContainerOperations {
+  add: (parentId?: string) => string;
+  update: (id: string, updates: Partial<Container>) => void;
+  delete: (id: string) => void;
+}
+```
+
+### 2. Core Logic Layer
+```typescript
+// Implement basic operations
+class ContainerManager implements ContainerOperations {
+  add(parentId?: string) {
+    // Basic container creation
+    return newId;
+  }
+  
+  update(id: string, updates: Partial<Container>) {
+    // Simple update logic
+  }
+  
+  delete(id: string) {
+    // Basic deletion
+  }
+}
+```
+
+### 3. Validation Layer
+```typescript
+class ValidatedContainerManager extends ContainerManager {
+  add(parentId?: string) {
+    this.validateParent(parentId);
+    return super.add(parentId);
+  }
+  
+  update(id: string, updates: Partial<Container>) {
+    this.validateUpdates(updates);
+    super.update(id, updates);
+  }
+}
+```
+
+### 4. Transform Layer
+```typescript
+class TransformableContainerManager extends ValidatedContainerManager {
+  update(id: string, updates: Partial<Container>) {
+    const transformedUpdates = this.applyTransforms(updates);
+    super.update(id, transformedUpdates);
+  }
+}
+```
+
+### 5. Event Layer
+```typescript
+class EventAwareContainerManager extends TransformableContainerManager {
+  update(id: string, updates: Partial<Container>) {
+    this.emitPreUpdate(id, updates);
+    super.update(id, updates);
+    this.emitPostUpdate(id);
+  }
+}
+```
+
+### Layer Implementation Process
+1. Start with interfaces and type definitions
+2. Implement basic functionality without validation
+3. Add validation and error handling
+4. Implement transformation logic
+5. Add event handling and side effects
+6. Optimize and add performance enhancements
+
+### Development Rules
+1. Never skip layers - build from bottom up
+2. Complete each layer before moving to next
+3. Keep layers independent and replaceable
+4. Test each layer independently
+5. Document layer boundaries and interfaces
+
+## Performance Optimization Layers
+
+1. Basic Optimization:
+   ```typescript
+   // Memoization
+   const memoizedCalculation = useMemo(() => {
+     return expensiveOperation(deps);
+   }, [deps]);
+
+   // Debouncing
+   const debouncedUpdate = useCallback(
+     debounce((updates) => {
+       applyUpdates(updates);
+     }, 16),
+     []
+   );
+   ```
+
+2. Advanced Optimization:
+   ```typescript
+   // Virtual rendering
+   const virtualizedList = useVirtual({
+     size: items.length,
+     parentRef,
+     estimateSize: useCallback(() => 35, [])
+   });
+
+   // Batch updates
+   const batchedUpdates = useCallback((updates: Update[]) => {
+     ReactDOM.unstable_batchedUpdates(() => {
+       updates.forEach(update => applyUpdate(update));
+     });
+   }, []);
+   ```
+
+## Root Cause Analysis Steps
+
+1. Issue Identification:
+   ```typescript
+   // Add to Canvas.tsx transformations
+   console.log('Transform Operation:', {
+     type: 'container/asset',
+     id: selectedId,
+     currentState: {
+       position: e.target.position(),
+       size: {
+         width: e.target.width(),
+         height: e.target.height()
+       }
+     }
+   });
+
+   // Add to layoutStore state changes
+   console.log('State Update:', {
+     operation: 'update/delete/add',
+     target: 'container/asset',
+     previousState: containers[targetId],
+     newState: updates
+   });
+   ```
+
+2. Performance Monitoring:
+   ```typescript
+   // Add to critical render paths
+   console.time('renderOperation');
+   // ... render logic ...
+   console.timeEnd('renderOperation');
+   ```
+
+## Implementation Approach
+
+1. Base Layer (Always implement first):
+   ```typescript
+   // Define core interfaces
+   interface Container {
+     id: string;
+     position: Position;
+     size: Size;
+   }
+
+   // Basic operations
+   const addContainer = (id: string) => {
+     // Basic container creation
+   };
+   ```
+
+2. Transform Layer:
+   ```typescript
+   // Add transformation logic
+   const handleTransform = (e: KonvaEventObject<Event>) => {
+     // Transform operations
+   };
+   ```
+
+3. Interaction Layer:
+   ```typescript
+   // Implement user interactions
+   const handleDrag = (e: KonvaEventObject<DragEvent>) => {
+     // Drag operations
+   };
+   ```
+
+## Clarifying Questions Framework
+
+Before implementing features, always ask:
+
+1. Container Management:
+   - What is the parent-child relationship model?
+   - How should containers behave during parent transformation?
+   - What are the size and position constraints?
+
+2. Asset Handling:
+   - How should assets scale within containers?
+   - What are the supported asset types and their behaviors?
+   - How should asset origins and transforms be calculated?
+
+3. Layout Behavior:
+   - How should layouts adapt to different devices?
+   - What are the grid snapping rules?
+   - How should orientation changes be handled?
+
+## Performance Guidelines
+
+1. Asset Management:
+   - Use progressive loading for large assets
+   - Implement proper image caching
+   - Optimize asset transformations
+
+2. State Updates:
+   - Batch related updates
+   - Debounce frequent updates
+   - Use memoization for expensive calculations
+
+3. Rendering Optimization:
+   - Implement proper layer management
+   - Use RAF for smooth animations
+   - Optimize component re-renders 
