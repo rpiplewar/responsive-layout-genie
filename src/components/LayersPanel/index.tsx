@@ -237,15 +237,49 @@ export const LayersPanel: React.FC = () => {
   const { toggleContainerLock, toggleAssetLock } = useLayoutStore();
 
   const handleToggleLock = (id: string) => {
-    const node = getLayerHierarchy().find(n => n.id === id) || 
-                getLayerHierarchy().flatMap(n => n.children).find(n => n.id === id);
+    console.log('[debug] Attempting to toggle lock for:', { id });
+    
+    // First try to find in root nodes
+    let node = getLayerHierarchy().find(n => n.id === id);
+    
+    // If not found in root, search in all children
+    if (!node) {
+      for (const rootNode of getLayerHierarchy()) {
+        const findInChildren = (children: LayerNode[]): LayerNode | undefined => {
+          for (const child of children) {
+            if (child.id === id) return child;
+            if (child.children.length > 0) {
+              const found = findInChildren(child.children);
+              if (found) return found;
+            }
+          }
+          return undefined;
+        };
+        node = findInChildren(rootNode.children);
+        if (node) break;
+      }
+    }
+    
+    console.log('[debug] Found node:', { 
+      node,
+      type: node?.type,
+      parentId: node?.parentId,
+      isLocked: node?.isLocked
+    });
     
     if (node) {
       if (node.type === 'container') {
+        console.log('[debug] Toggling container lock:', { id });
         toggleContainerLock(id);
       } else {
+        console.log('[debug] Toggling asset lock:', { 
+          parentId: node.parentId,
+          assetId: id
+        });
         toggleAssetLock(node.parentId!, id);
       }
+    } else {
+      console.error('[debug] Node not found for id:', id);
     }
   };
 

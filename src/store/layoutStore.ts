@@ -49,6 +49,7 @@ export interface Container {
   parentId?: string;
   assets: { [key: string]: Asset };
   isLocked?: boolean;
+  level: number;
 }
 
 export interface AssetMetadata {
@@ -239,6 +240,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       },
       parentId,
       assets: {},
+      level: parent ? parent.level + 1 : 0,
     };
 
     console.log('New container created:', { id: newContainer.id, name: newContainer.name, parentId: newContainer.parentId });
@@ -310,6 +312,41 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       // Force a sync first to ensure the new asset is in the layer hierarchy
       useLayerStore.getState().syncWithLayoutStore();
       // Then select the new asset
+      useLayerStore.getState().selectLayer(newAsset.id);
+    });
+  },
+
+  duplicateAsset: (containerId: string, assetId: string) => {
+    const container = get().containers.find(c => c.id === containerId);
+    if (!container) return;
+
+    const sourceAsset = container.assets[assetId];
+    if (!sourceAsset) return;
+
+    const newAsset: Asset = {
+      ...sourceAsset,
+      id: crypto.randomUUID(),
+      name: `${sourceAsset.name} Copy`,
+      // Keep the same key as the source asset
+      key: sourceAsset.key,
+      // Deep clone the transforms to avoid reference issues
+      portrait: JSON.parse(JSON.stringify(sourceAsset.portrait)),
+      landscape: JSON.parse(JSON.stringify(sourceAsset.landscape)),
+    };
+
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
+        : c
+    );
+    get().saveToHistory(newContainers);
+    
+    // Update the selected asset ID to the new copy
+    set({ selectedAssetId: newAsset.id });
+    
+    // Update the layer store to select the new asset
+    import('./layerStore').then(({ useLayerStore }) => {
+      useLayerStore.getState().syncWithLayoutStore();
       useLayerStore.getState().selectLayer(newAsset.id);
     });
   },
@@ -567,9 +604,17 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   importConfig: (config) => {
     const flattenContainers = (
       containers: { [key: string]: NestedContainer },
-      parentId?: string
+      parentId?: string,
+      level: number = 0
     ): Container[] => {
       const selectedDevice = devices[get().selectedDevice];
+      console.log('[debug] Flattening containers:', {
+        containerKeys: Object.keys(containers),
+        parentId,
+        level,
+        hasChildren: Object.values(containers).some(c => c.children && Object.keys(c.children).length > 0)
+      });
+      
       return Object.entries(containers).flatMap(([name, container]) => {
         const id = crypto.randomUUID();
         const flatContainer: Container = {
@@ -603,10 +648,20 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
               }
             }
           }), {}) : {},
+          level // Add level information
         };
 
+        console.log('[debug] Created flat container:', {
+          id: flatContainer.id,
+          name: flatContainer.name,
+          parentId: flatContainer.parentId,
+          level: level,
+          assetCount: Object.keys(flatContainer.assets).length,
+          hasChildren: container.children && Object.keys(container.children).length > 0
+        });
+
         const children = container.children
-          ? flattenContainers(container.children, id)
+          ? flattenContainers(container.children, id, level + 1)
           : [];
 
         return [flatContainer, ...children];
@@ -614,8 +669,20 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     };
 
     // First, update the containers and metadata
+    const flattened = flattenContainers(config.containers);
+    console.log('[debug] Final flattened containers:', {
+      totalContainers: flattened.length,
+      hierarchy: flattened.map(c => ({
+        id: c.id,
+        name: c.name,
+        parentId: c.parentId,
+        level: c.level,
+        assetCount: Object.keys(c.assets).length
+      }))
+    });
+
     set((state) => ({
-      containers: flattenContainers(config.containers),
+      containers: flattened,
       assetMetadata: {
         ...state.assetMetadata,
         ...Object.values(config.containers).reduce((acc, container) => {
@@ -626,7 +693,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
                   id: asset.name,
                   name: asset.name,
                   type: 'image',
-                  size: 0, // Will be updated when image is uploaded
+                  size: 0,
                   dateUploaded: Date.now(),
                 };
               }
@@ -655,6 +722,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         }, {} as { [key: string]: string })
       }
     }));
+
+    // Force layer store sync after import
+    import('./layerStore').then(({ useLayerStore }) => {
+      console.log('[debug] Triggering layer store sync after import');
+      useLayerStore.getState().syncWithLayoutStore();
+    });
   },
   
   exportLayout: async () => {
@@ -691,37 +764,6 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   setActiveOrientation: (orientation) => set({ activeOrientation: orientation }),
-
-  duplicateAsset: (containerId: string, assetId: string) => {
-    const container = get().containers.find(c => c.id === containerId);
-    if (!container || !container.assets[assetId]) return;
-
-    const sourceAsset = container.assets[assetId];
-    const newAsset: Asset = {
-      ...sourceAsset,
-      id: crypto.randomUUID(),
-      name: `${sourceAsset.name} (Copy)`,
-    };
-
-    const newContainers = get().containers.map(c => 
-      c.id === containerId 
-        ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
-        : c
-    );
-    get().saveToHistory(newContainers);
-    
-    // Update the selected asset ID
-    set({ selectedAssetId: newAsset.id });
-    
-    // Also update the layer store to select this asset
-    // We need to import this dynamically to avoid circular dependencies
-    import('./layerStore').then(({ useLayerStore }) => {
-      // Force a sync first to ensure the new asset is in the layer hierarchy
-      useLayerStore.getState().syncWithLayoutStore();
-      // Then select the new asset
-      useLayerStore.getState().selectLayer(newAsset.id);
-    });
-  },
 
   reorderContainer: (containerId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
     const state = get();
@@ -865,34 +907,120 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   toggleContainerLock: (id: string) => {
     const container = get().containers.find(c => c.id === id);
-    if (!container) return;
+    console.log('[debug] Toggling container lock:', {
+      containerId: id,
+      containerName: container?.name,
+      currentLockState: container?.isLocked,
+      containerData: container
+    });
+    
+    if (!container) {
+      console.error('[debug] Container not found:', id);
+      return;
+    }
 
     const newContainers = get().containers.map(c => 
       c.id === id 
-        ? { ...c, isLocked: !c.isLocked }
-        : c
-    );
-    get().saveToHistory(newContainers);
-  },
-
-  toggleAssetLock: (containerId: string, assetId: string) => {
-    const container = get().containers.find(c => c.id === containerId);
-    if (!container || !container.assets[assetId]) return;
-
-    const newContainers = get().containers.map(c => 
-      c.id === containerId 
-        ? {
-            ...c,
-            assets: {
-              ...c.assets,
+        ? { 
+            ...c, 
+            isLocked: !c.isLocked,
+            // Also lock/unlock all assets in the container
+            assets: Object.entries(c.assets).reduce((acc, [assetId, asset]) => ({
+              ...acc,
               [assetId]: {
-                ...c.assets[assetId],
-                isLocked: !c.assets[assetId].isLocked
+                ...asset,
+                isLocked: !c.isLocked // Match container's new lock state
               }
-            }
+            }), {})
           }
         : c
     );
+    
+    const updatedContainer = newContainers.find(c => c.id === id);
+    console.log('[debug] Container lock state updated:', {
+      containerId: id,
+      containerName: updatedContainer?.name,
+      oldLockState: container.isLocked,
+      newLockState: updatedContainer?.isLocked,
+      assetLockStates: updatedContainer ? Object.entries(updatedContainer.assets).map(([id, asset]) => ({
+        id,
+        name: asset.name,
+        isLocked: asset.isLocked
+      })) : []
+    });
+    
     get().saveToHistory(newContainers);
+    
+    // Force layer store sync after lock state change
+    import('./layerStore').then(({ useLayerStore }) => {
+      console.log('[debug] Triggering layer store sync after container lock change');
+      useLayerStore.getState().syncWithLayoutStore();
+    });
+  },
+
+  toggleAssetLock: (containerId: string, assetId: string) => {
+    const state = get();
+    const container = state.containers.find(c => c.id === containerId);
+    console.log('[debug] Attempting to toggle asset lock:', { 
+      containerId, 
+      containerName: container?.name,
+      assetId,
+      assetName: container?.assets[assetId]?.name,
+      currentLockState: container?.assets[assetId]?.isLocked ?? false,
+      containerLockState: container?.isLocked ?? false,
+      assetData: container?.assets[assetId]
+    });
+    
+    if (!container || !container.assets[assetId]) {
+      console.error('[debug] Container or asset not found:', { 
+        containerId, 
+        containerExists: !!container,
+        assetId,
+        availableAssets: container ? Object.keys(container.assets) : []
+      });
+      return;
+    }
+
+    // If container is locked, we can't toggle individual assets
+    if (container.isLocked) {
+      console.log('[debug] Cannot toggle asset lock - container is locked');
+      return;
+    }
+
+    // Create a new container with the updated asset
+    const updatedContainer = {
+      ...container,
+      assets: {
+        ...container.assets,
+        [assetId]: {
+          ...container.assets[assetId],
+          isLocked: !container.assets[assetId].isLocked
+        }
+      }
+    };
+
+    // Create new containers array with the updated container
+    const newContainers = state.containers.map(c => 
+      c.id === containerId ? updatedContainer : c
+    );
+    
+    console.log('[debug] Asset lock state updated:', {
+      containerId,
+      containerName: updatedContainer.name,
+      assetId,
+      assetName: updatedContainer.assets[assetId].name,
+      oldLockState: container.assets[assetId].isLocked ?? false,
+      newLockState: updatedContainer.assets[assetId].isLocked,
+      containerLockState: updatedContainer.isLocked
+    });
+    
+    // Save to history and update state
+    state.saveToHistory(newContainers);
+    
+    // Force layer store sync after lock state change
+    import('./layerStore').then(({ useLayerStore }) => {
+      console.log('[debug] Triggering layer store sync after asset lock change');
+      useLayerStore.getState().syncWithLayoutStore();
+    });
   },
 }));

@@ -84,11 +84,33 @@ export const useLayerStore = create<LayerState>((set, get) => ({
   // Hierarchy computation that works with existing container structure
   getLayerHierarchy: () => {
     const state = get();
-    console.log('=== Computing Layer Hierarchy ===', {
-      containers: state.containers.map(c => ({ id: c.id, parentId: c.parentId }))
+    const layoutStore = useLayoutStore.getState();
+    
+    // Build a map of parent-child relationships first
+    const childrenMap = new Map<string, string[]>();
+    state.containers.forEach(container => {
+      if (container.parentId) {
+        const children = childrenMap.get(container.parentId) || [];
+        children.push(container.id);
+        childrenMap.set(container.parentId, children);
+      }
     });
     
     const buildNode = (container: Container, level: number = 0): LayerNode => {
+      console.log('[debug] Building node for container:', {
+        id: container.id,
+        name: container.name,
+        isLocked: container.isLocked,
+        level,
+        parentId: container.parentId,
+        assetCount: Object.keys(container.assets).length,
+        assets: Object.entries(container.assets).map(([id, asset]) => ({
+          id,
+          name: asset.name,
+          isLocked: asset.isLocked
+        }))
+      });
+
       const node: LayerNode = {
         id: container.id,
         name: container.name,
@@ -100,22 +122,37 @@ export const useLayerStore = create<LayerState>((set, get) => ({
         parentId: container.parentId || null,
         level
       };
-      console.log('Building node:', { 
-        id: node.id, 
-        parentId: node.parentId, 
-        level,
-        containerParentId: container.parentId 
+
+      // First add child containers
+      const childContainerIds = childrenMap.get(container.id) || [];
+      childContainerIds.forEach(childId => {
+        const childContainer = state.containers.find(c => c.id === childId);
+        if (childContainer) {
+          node.children.push(buildNode(childContainer, level + 1));
+        }
       });
 
-      // Add assets as children
+      // Then add assets with proper lock states
       Object.entries(container.assets).forEach(([id, asset]) => {
+        console.log('[debug] Building node for asset:', {
+          id,
+          name: asset.name,
+          isLocked: asset.isLocked,
+          parentId: container.id,
+          level: level + 1,
+          containerLocked: container.isLocked
+        });
+
+        // If container is locked, all assets should be locked
+        const isLocked = container.isLocked || asset.isLocked;
+
         node.children.push({
           id,
           name: asset.name,
           type: 'asset',
           isExpanded: false,
           isVisible: asset.portrait.isVisible ?? true,
-          isLocked: asset.isLocked ?? false,
+          isLocked: isLocked,
           children: [],
           parentId: container.id,
           level: level + 1
@@ -125,52 +162,27 @@ export const useLayerStore = create<LayerState>((set, get) => ({
       return node;
     };
 
-    const nodes = new Map<string, LayerNode>();
-    const rootNodes: LayerNode[] = [];
+    // Only process root containers (those without parents)
+    const rootNodes = state.containers
+      .filter(container => !container.parentId)
+      .map(container => buildNode(container, 0));
 
-    // First pass: create all nodes
-    state.containers.forEach(container => {
-      const node = buildNode(container, container.parentId ? 1 : 0);
-      nodes.set(container.id, node);
-      if (!container.parentId) {
-        console.log('Adding root node:', { 
-          id: node.id, 
-          parentId: node.parentId,
-          containerParentId: container.parentId 
-        });
-        rootNodes.push(node);
-      }
-    });
-
-    // Second pass: build hierarchy
-    state.containers.forEach(container => {
-      if (container.parentId) {
-        const parentNode = nodes.get(container.parentId);
-        const currentNode = nodes.get(container.id);
-        if (parentNode && currentNode) {
-          console.log('Building hierarchy - Adding child to parent:', { 
-            childId: currentNode.id, 
-            childParentId: currentNode.parentId,
-            parentId: parentNode.id,
-            containerParentId: container.parentId 
-          });
-          parentNode.children.unshift(currentNode); // Add containers before assets
-        } else {
-          console.error('Building hierarchy - Missing nodes:', {
-            containerId: container.id,
-            containerParentId: container.parentId,
-            hasParentNode: !!parentNode,
-            hasCurrentNode: !!currentNode
-          });
-        }
-      }
-    });
-
-    console.log('=== Final Layer Hierarchy ===', {
-      rootNodes: rootNodes.map(node => ({ 
-        id: node.id, 
-        parentId: node.parentId,
-        children: node.children.map(child => ({ id: child.id, parentId: child.parentId }))
+    console.log('[debug] Final hierarchy details:', {
+      totalNodes: rootNodes.length,
+      selectedId: state.selectedId,
+      rootNodes: rootNodes.map(node => ({
+        id: node.id,
+        name: node.name,
+        isLocked: node.isLocked,
+        childCount: node.children.length,
+        children: node.children.map(child => ({
+          id: child.id,
+          name: child.name,
+          type: child.type,
+          isLocked: child.isLocked,
+          parentId: child.parentId,
+          level: child.level
+        }))
       }))
     });
 
@@ -179,39 +191,62 @@ export const useLayerStore = create<LayerState>((set, get) => ({
 
   // Selection handling that integrates with existing system
   selectLayer: (id: string | null, event?: React.MouseEvent | MouseEvent) => {
-    set({ selectedId: id });
+    console.log('[debug] Layer selection attempt:', { id });
     
     // Find the selected node to determine if it's an asset
     if (id) {
       const findNode = (nodes: LayerNode[]): LayerNode | null => {
         for (const node of nodes) {
           if (node.id === id) return node;
-          const found = findNode(node.children);
-          if (found) return found;
+          for (const child of node.children) {
+            if (child.id === id) return child;
+            const found = findNode([child]);
+            if (found) return found;
+          }
         }
         return null;
       };
       
       const hierarchy = get().getLayerHierarchy();
       const selectedNode = findNode(hierarchy);
+      console.log('[debug] Found selected node:', { 
+        selectedNode,
+        nodeType: selectedNode?.type,
+        parentId: selectedNode?.parentId,
+        level: selectedNode?.level
+      });
       
       if (selectedNode) {
         const layoutStore = useLayoutStore.getState();
         
         if (selectedNode.type === 'asset') {
-          // If it's an asset, set the container ID and asset ID
+          console.log('[debug] Selecting asset:', { 
+            parentId: selectedNode.parentId, 
+            assetId: selectedNode.id,
+            assetName: selectedNode.name,
+            level: selectedNode.level
+          });
+          // If it's an asset, set both container ID and asset ID
           layoutStore.setSelectedId(selectedNode.parentId);
           layoutStore.setSelectedAssetId(selectedNode.id);
+          set({ selectedId: selectedNode.id }); // Also update layer store selection
         } else {
+          console.log('[debug] Selecting container:', { 
+            containerId: id,
+            containerName: selectedNode.name,
+            level: selectedNode.level
+          });
           // If it's a container, just set the container ID and clear asset ID
           layoutStore.setSelectedId(id);
           layoutStore.setSelectedAssetId(null);
+          set({ selectedId: id });
         }
       }
     } else {
       // If nothing is selected, clear both selections
       useLayoutStore.getState().setSelectedId(null);
       useLayoutStore.getState().setSelectedAssetId(null);
+      set({ selectedId: null });
     }
   },
 
@@ -236,26 +271,83 @@ export const useLayerStore = create<LayerState>((set, get) => ({
     const layoutStore = useLayoutStore.getState();
     const state = get();
     
-    console.log('=== Starting sync with layout store ===');
-    console.log('Layout store containers:', layoutStore.containers);
-    console.log('Current layer store containers:', state.containers);
-    
     if (!layoutStore.containers) {
-      console.error('Invalid layout state:', layoutStore);
+      console.error('[debug] Invalid layout state:', layoutStore);
       return;
     }
     
-    // Update containers and selected ID from layout store
-    set({
-      containers: layoutStore.containers,
-      selectedId: layoutStore.selectedId
+    console.log('[debug] Starting sync with layout store:', {
+      layoutSelectedId: layoutStore.selectedId,
+      layoutSelectedAssetId: layoutStore.selectedAssetId,
+      currentSelectedId: state.selectedId,
+      containers: layoutStore.containers.map(c => ({
+        id: c.id,
+        name: c.name,
+        isLocked: c.isLocked,
+        assetCount: Object.keys(c.assets).length,
+        assets: Object.entries(c.assets).map(([id, asset]) => ({
+          id,
+          name: asset.name,
+          isLocked: asset.isLocked
+        }))
+      }))
     });
     
-    console.log('=== After sync ===');
-    console.log('Updated layer store containers:', get().containers);
-    console.log('Building hierarchy...');
+    // Ensure lock states are properly synced
+    const containersWithLockStates = layoutStore.containers.map(container => {
+      console.log('[debug] Processing container lock states:', {
+        containerId: container.id,
+        containerName: container.name,
+        containerLocked: container.isLocked,
+        assetLockStates: Object.entries(container.assets).map(([id, asset]) => ({
+          id,
+          name: asset.name,
+          isLocked: asset.isLocked
+        }))
+      });
+
+      return {
+        ...container,
+        isLocked: container.isLocked ?? false,
+        assets: Object.entries(container.assets).reduce((acc, [id, asset]) => ({
+          ...acc,
+          [id]: {
+            ...asset,
+            isLocked: container.isLocked || (asset.isLocked ?? false)
+          }
+        }), {})
+      };
+    });
+    
+    // Update containers and selected ID from layout store
+    set({
+      containers: containersWithLockStates,
+      // If there's a selected asset, use that as the selected ID, otherwise use the container ID
+      selectedId: layoutStore.selectedAssetId || layoutStore.selectedId
+    });
+    
+    // Force hierarchy rebuild and log the result
     const hierarchy = get().getLayerHierarchy();
-    console.log('Final hierarchy:', hierarchy);
+    console.log('[debug] Sync complete - Current hierarchy:', {
+      totalNodes: hierarchy.length,
+      selectedId: get().selectedId,
+      hierarchySnapshot: hierarchy.map(node => ({
+        id: node.id,
+        name: node.name,
+        type: 'container',
+        level: node.level,
+        isLocked: node.isLocked,
+        childCount: node.children.length,
+        children: node.children.map(child => ({
+          id: child.id,
+          name: child.name,
+          type: child.type,
+          level: child.level,
+          isLocked: child.isLocked,
+          parentId: child.parentId
+        }))
+      }))
+    });
   },
 
   // Drag and drop actions

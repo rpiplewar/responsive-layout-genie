@@ -102,14 +102,24 @@ export const PropertiesPanel = () => {
             </Button>
           )}
           {selectedAsset && selectedContainer && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => deleteAsset(selectedContainer.id, selectedAsset.id)}
-              title="Delete Asset"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => duplicateAsset(selectedContainer.id, selectedAsset.id)}
+                title="Duplicate Asset"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => deleteAsset(selectedContainer.id, selectedAsset.id)}
+                title="Delete Asset"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       </div>
