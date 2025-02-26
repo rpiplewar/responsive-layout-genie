@@ -2,7 +2,7 @@ import { useLayoutStore } from '../store/layoutStore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Trash2, Copy, Replace } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, Copy, Replace, Edit2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useState, useRef } from 'react';
 import {
@@ -25,25 +25,43 @@ export const AssetLibrary = () => {
   const [pendingReplace, setPendingReplace] = useState<{ key: string, file: File } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [newKey, setNewKey] = useState('');
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, replaceKey?: string) => {
     const files = event.target.files;
     if (!files) return;
 
-    const file = files[0];
-    if (file.size > 5242880) { // 5MB
-      toast({
-        title: "File too large",
-        description: `${file.name} exceeds the 5MB limit`,
-      });
-      return;
-    }
-
     if (replaceKey) {
+      const file = files[0];
+      if (file.size > 5242880) {
+        toast({
+          title: "File too large",
+          description: `${file.name} exceeds the 5MB limit`,
+        });
+        return;
+      }
       setPendingReplace({ key: replaceKey, file });
       setShowReplaceDialog(true);
     } else {
-      setSelectedFile(file);
+      // Handle multiple files
+      Array.from(files).forEach(file => {
+        if (file.size > 5242880) {
+          toast({
+            title: "File too large",
+            description: `${file.name} exceeds the 5MB limit`,
+          });
+          return;
+        }
+        const baseKey = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+        const uniqueKey = `${baseKey}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        uploadImage(uniqueKey, file);
+        toast({
+          title: "Asset uploaded",
+          description: `${file.name} has been uploaded with key: ${uniqueKey}`,
+        });
+      });
+      setSelectedFile(null);
     }
     
     // Reset the file input
@@ -118,6 +136,7 @@ export const AssetLibrary = () => {
                 id="asset-upload"
                 type="file"
                 accept="image/*"
+                multiple
                 className="hidden"
                 onChange={(e) => handleFileChange(e)}
               />
@@ -153,9 +172,46 @@ export const AssetLibrary = () => {
                   </div>
                   <div className="p-2 space-y-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-white truncate" title={id}>
-                        {id}
-                      </p>
+                      {editingKey === id ? (
+                        <form 
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (newKey && newKey !== id) {
+                              if (uploadedImages[newKey]) {
+                                toast({
+                                  title: "Key already exists",
+                                  description: "Please choose a different key",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              const oldData = uploadedImages[id];
+                              const oldMetadata = assetMetadata[id];
+                              uploadImage(newKey, new File([dataURItoBlob(oldData)], oldMetadata.name));
+                              deleteAssetFromLibrary(id);
+                              toast({
+                                title: "Asset key updated",
+                                description: `Key changed from ${id} to ${newKey}`,
+                              });
+                            }
+                            setEditingKey(null);
+                            setNewKey('');
+                          }}
+                          className="flex-1 mr-2"
+                        >
+                          <Input
+                            value={newKey}
+                            onChange={(e) => setNewKey(e.target.value)}
+                            className="h-6 text-sm bg-editor-grid/50"
+                            placeholder="Enter new key"
+                            autoFocus
+                          />
+                        </form>
+                      ) : (
+                        <p className="text-sm text-white truncate" title={id}>
+                          {id}
+                        </p>
+                      )}
                       <div className="flex gap-1">
                         <input
                           type="file"
@@ -190,6 +246,22 @@ export const AssetLibrary = () => {
                           }}
                         >
                           <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-gray-400 hover:text-editor-accent"
+                          onClick={() => {
+                            if (editingKey === id) {
+                              setEditingKey(null);
+                              setNewKey('');
+                            } else {
+                              setEditingKey(id);
+                              setNewKey(id);
+                            }
+                          }}
+                        >
+                          <Edit2 className="h-3 w-3" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -247,4 +319,15 @@ export const AssetLibrary = () => {
       </AlertDialog>
     </>
   );
-}; 
+};
+
+function dataURItoBlob(dataURI: string) {
+  const byteString = atob(dataURI.split(',')[1]);
+  const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+} 
