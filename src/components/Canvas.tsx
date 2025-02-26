@@ -442,8 +442,6 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     const centerX = node.x() + newWidth / 2;
     const centerY = node.y() + newHeight / 2;
 
-    const scaleChangeX = newWidth / oldPos.width;
-    const scaleChangeY = newHeight / oldPos.height;
     const deltaX = centerX - oldPos.x;
     const deltaY = centerY - oldPos.y;
 
@@ -460,21 +458,27 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
         if (childContainer.parentId === parentId) {
           const childPos = childContainer[orientation];
           
-          // Scale child container relative to parent's scale change
-          const newChildWidth = childPos.width * scaleChangeX;
-          const newChildHeight = childPos.height * scaleChangeY;
-          
-          // Move child by the same delta as parent
+          // Only update position, preserve original size
           updateContainer(childContainer.id, {
             x: childPos.x + deltaX,
             y: childPos.y + deltaY,
-            width: newChildWidth,
-            height: newChildHeight,
           }, orientation);
 
           // Update all assets in this container
           Object.entries(childContainer.assets).forEach(([assetId, asset]) => {
-            updateAsset(childContainer.id, assetId, asset[orientation], orientation);
+            const assetTransform = asset[orientation];
+            if (assetTransform.position.reference === 'container') {
+              // Only update container-relative assets' positions
+              const assetUpdates = {
+                ...assetTransform,
+                position: {
+                  ...assetTransform.position,
+                  x: assetTransform.position.x,
+                  y: assetTransform.position.y
+                }
+              };
+              updateAsset(childContainer.id, assetId, assetUpdates, orientation);
+            }
           });
 
           // Recursively update this container's children
@@ -493,14 +497,12 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     if (!container) return null;
     
     const containerPos = container[orientation];
-    // Account for container's center-based positioning
-    const containerX = containerPos.x - containerPos.width / 2;
-    const containerY = containerPos.y - containerPos.height / 2;
     
     if (transform.position.reference === 'container') {
+      // Don't adjust for container center here since we use absolute coordinates
       return {
-        x: containerX + transform.position.x * containerPos.width,
-        y: containerY + transform.position.y * containerPos.height
+        x: containerPos.x + (transform.position.x - 0.5) * containerPos.width,
+        y: containerPos.y + (transform.position.y - 0.5) * containerPos.height
       };
     }
 
@@ -515,9 +517,70 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
 
     return {
-      x: refOrigin.x + transform.position.x * refDimensions.width,
-      y: refOrigin.y + transform.position.y * refDimensions.height
+      x: refOrigin.x + (transform.position.x - 0.5) * refDimensions.width,
+      y: refOrigin.y + (transform.position.y - 0.5) * refDimensions.height
     };
+  };
+
+  const renderContainer = (container: Container) => {
+    const position = container[orientation];
+    const x = position.x - position.width / 2;
+    const y = position.y - position.height / 2;
+    const isSelected = selectedId === container.id && !selectedAssetId;
+    const hasParent = !!container.parentId;
+    const isLocked = container.isLocked;
+    
+    return (
+      <Group key={container.id}>
+        <Rect
+          ref={isSelected ? selectedShapeRef : undefined}
+          id={container.id}
+          x={x}
+          y={y}
+          width={position.width}
+          height={position.height}
+          fill={hasParent ? '#bb9af7' : '#7aa2f7'}
+          opacity={0.3}
+          stroke={isSelected ? '#bb9af7' : (hasParent ? '#bb9af7' : '#7aa2f7')}
+          strokeWidth={hasParent ? 2 : 1}
+          dash={hasParent ? [5, 5] : undefined}
+          draggable={!isLocked}
+          onClick={(e) => {
+            e.cancelBubble = true;
+            handleElementClick();
+            
+            if (selectedId === container.id) {
+              setSelectedId(null);
+            } else {
+              setSelectedId(container.id);
+              setSelectedAssetId(null);
+            }
+          }}
+          onDragStart={() => {
+            if (isLocked) return;
+            setIsDragging(true);
+          }}
+          onDragMove={(e) => {
+            if (isLocked) return;
+            handleElementClick();
+            handleDragMove(e, container.id);
+          }}
+          onDragEnd={() => {
+            if (isLocked) return;
+            setIsDragging(false);
+            clearGuides();
+          }}
+          onTransform={(e) => {
+            if (isLocked) return;
+            handleElementClick();
+            handleTransform(e, container.id);
+          }}
+        />
+        <Group>
+          {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
+        </Group>
+      </Group>
+    );
   };
 
   const renderAsset = (containerId: string, asset: Asset) => {
@@ -530,6 +593,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     
     const containerPos = container[orientation];
     const image = imageElementsRef.current[asset.key];
+    const isLocked = asset.isLocked || container.isLocked; // Asset is locked if either it or its container is locked
 
     const calculateAssetDimensions = (assetTransform: AssetTransform, image: HTMLImageElement | null, isContainerRelative: boolean, referenceAssetId?: string): { width: number, height: number } => {
       if (!image) return { width: 0, height: 0 };
@@ -618,14 +682,19 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           y={originY}
           width={width}
           height={height}
-          offsetX={transform.origin.x * width}
-          offsetY={transform.origin.y * height}
+          offsetX={width / 2}
+          offsetY={height / 2}
           rotation={transform.rotation}
-          draggable
-          transformable={true}
+          draggable={!isLocked}
+          transformable={!isLocked}
           onClick={(e) => {
             e.cancelBubble = true;
             handleElementClick();
+            
+            // Store the current position before selection
+            const node = e.target;
+            const currentX = node.x();
+            const currentY = node.y();
             
             if (selectedId === containerId && selectedAssetId === asset.id) {
               setSelectedId(null);
@@ -634,14 +703,30 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               setSelectedId(containerId);
               setSelectedAssetId(asset.id);
             }
+            
+            // Restore position after selection
+            node.x(currentX);
+            node.y(currentY);
+          }}
+          onDragStart={(e) => {
+            if (isLocked) return;
+            setIsDragging(true);
+            // Store initial position in ref
+            const node = e.target;
+            lastPositionRef.current = {
+              x: node.x(),
+              y: node.y()
+            };
           }}
           onDragMove={(e) => {
+            if (isLocked) return;
             handleElementClick();
             const node = e.target;
             
             if (transform.position.reference === 'container') {
-              const newX = (node.x() - containerPos.x) / containerPos.width;
-              const newY = (node.y() - containerPos.y) / containerPos.height;
+              // Calculate position relative to container center
+              const newX = (node.x() - containerPos.x) / containerPos.width + 0.5;
+              const newY = (node.y() - containerPos.y) / containerPos.height + 0.5;
               
               const updates = {
                 ...transform,
@@ -654,45 +739,51 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               updateAsset(containerId, asset.id, updates, orientation);
             } else {
               const newPos = calculateRelativePosition(node, transform.position.reference);
-              if (!newPos) return;
+              if (!newPos && lastPositionRef.current) {
+                // If calculation fails, restore last good position
+                node.x(lastPositionRef.current.x);
+                node.y(lastPositionRef.current.y);
+                return;
+              }
 
               const updates = {
                 ...transform,
                 position: {
                   ...transform.position,
-                  x: newPos.x,
-                  y: newPos.y
+                  x: newPos.x + 0.5,
+                  y: newPos.y + 0.5
                 }
               };
               updateAsset(containerId, asset.id, updates, orientation);
             }
 
-            // Update all assets that reference this one
+            // Store last good position
+            lastPositionRef.current = {
+              x: node.x(),
+              y: node.y()
+            };
+
+            // Update dependent assets
             const updateDependentAssets = (assetId: string) => {
               Object.entries(container.assets).forEach(([id, dependentAsset]) => {
                 if (dependentAsset[orientation].position.reference === assetId) {
-                  const origin = calculateOriginPoint(containerId, id, dependentAsset[orientation]);
-                  if (!origin) return;
-
-                  // Keep the same relative position but update based on new reference position
                   updateAsset(containerId, id, dependentAsset[orientation], orientation);
-                  
-                  // Recursively update assets that reference this dependent asset
                   updateDependentAssets(id);
                 }
               });
             };
-
-            // Start the cascade of updates from the dragged asset
             updateDependentAssets(asset.id);
           }}
           onTransform={(e) => {
+            if (isLocked) return;
             handleElementClick();
             const node = e.target;
             
-            // Get current scale
+            // Get current scale and position before any resets
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
+            const currentAbsX = node.x();
+            const currentAbsY = node.y();
             
             // Get the reference dimensions
             const isContainerRelative = transform.position.reference === 'container';
@@ -703,46 +794,35 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               assetDimensionsRef.current[transform.position.reference]?.height || containerPos.height
             );
             
-            // Calculate new dimensions relative to reference
-            const currentWidth = width;  // Current display width
-            const currentHeight = height;  // Current display height
+            // Calculate new absolute dimensions
+            let newAbsWidth = node.width() * scaleX;
+            let newAbsHeight = node.height() * scaleY;
             
-            // Convert current size to relative size
-            const currentRelativeWidth = currentWidth / baseWidth;
-            const currentRelativeHeight = currentHeight / baseHeight;
-            
-            // Apply scale to relative size
-            let newWidth = currentRelativeWidth * scaleX;
-            let newHeight = currentRelativeHeight * scaleY;
-            
-            // If maintaining aspect ratio, adjust the dimensions
+            // If maintaining aspect ratio, adjust dimensions
             if (transform.maintainAspectRatio && image) {
               const imageAspectRatio = image.width / image.height;
-              const newAspectRatio = (newWidth * baseWidth) / (newHeight * baseHeight);
+              const newAspectRatio = newAbsWidth / newAbsHeight;
               
               if (transform.scaleMode === 'fit') {
                 if (newAspectRatio > imageAspectRatio) {
-                  newWidth = newHeight * imageAspectRatio;
+                  newAbsWidth = newAbsHeight * imageAspectRatio;
                 } else {
-                  newHeight = newWidth / imageAspectRatio;
+                  newAbsHeight = newAbsWidth / imageAspectRatio;
                 }
               } else if (transform.scaleMode === 'fill') {
                 if (newAspectRatio > imageAspectRatio) {
-                  newHeight = newWidth / imageAspectRatio;
+                  newAbsHeight = newAbsWidth / imageAspectRatio;
                 } else {
-                  newWidth = newHeight * imageAspectRatio;
+                  newAbsWidth = newAbsHeight * imageAspectRatio;
                 }
               }
             }
             
-            // Ensure minimum size
-            newWidth = Math.max(0.01, newWidth);
-            newHeight = Math.max(0.01, newHeight);
+            // Convert to relative sizes
+            const newWidth = Math.max(0.01, newAbsWidth / baseWidth);
+            const newHeight = Math.max(0.01, newAbsHeight / baseHeight);
             
-            // Reset scale since we'll apply it via width/height
-            node.scaleX(1);
-            node.scaleY(1);
-            
+            // Create the update with new dimensions
             const updates = {
               ...transform,
               size: {
@@ -751,17 +831,24 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               }
             };
             
+            // Reset scale AFTER calculating new dimensions
+            node.scaleX(1);
+            node.scaleY(1);
+            
+            // Restore absolute position to prevent jumping
+            node.x(currentAbsX);
+            node.y(currentAbsY);
+            
+            // Apply the update
             updateAsset(containerId, asset.id, updates, orientation);
           }}
-          onDragStart={() => {
-            setIsDragging(true);
-          }}
           onDragEnd={() => {
+            if (isLocked) return;
             setIsDragging(false);
             clearGuides();
           }}
         />
-        {isSelected && (
+        {isSelected && !isLocked && (
           <Circle
             x={originX}
             y={originY}
@@ -808,62 +895,6 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             }}
           />
         )}
-      </Group>
-    );
-  };
-
-  const renderContainer = (container: Container) => {
-    const position = container[orientation];
-    const x = position.x - position.width / 2;
-    const y = position.y - position.height / 2;
-    const isSelected = selectedId === container.id && !selectedAssetId;
-    const hasParent = !!container.parentId;
-    
-    return (
-      <Group key={container.id}>
-        <Rect
-          ref={isSelected ? selectedShapeRef : undefined}
-          id={container.id}
-          x={x}
-          y={y}
-          width={position.width}
-          height={position.height}
-          fill={hasParent ? '#bb9af7' : '#7aa2f7'}
-          opacity={0.3}
-          stroke={isSelected ? '#bb9af7' : (hasParent ? '#bb9af7' : '#7aa2f7')}
-          strokeWidth={hasParent ? 2 : 1}
-          dash={hasParent ? [5, 5] : undefined}
-          draggable
-          onClick={(e) => {
-            e.cancelBubble = true;
-            handleElementClick();
-            
-            if (selectedId === container.id) {
-              setSelectedId(null);
-            } else {
-              setSelectedId(container.id);
-              setSelectedAssetId(null);
-            }
-          }}
-          onDragStart={() => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e) => {
-            handleElementClick();
-            handleDragMove(e, container.id);
-          }}
-          onDragEnd={() => {
-            setIsDragging(false);
-            clearGuides();
-          }}
-          onTransform={(e) => {
-            handleElementClick();
-            handleTransform(e, container.id);
-          }}
-        />
-        <Group>
-          {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
-        </Group>
       </Group>
     );
   };
@@ -959,7 +990,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     clearGuides();
   };
 
-  // Update handleAlign to use the moved calculateOriginPoint
+  // Update handleAlign to strictly handle single-axis updates
   const handleAlign = (alignment: AlignmentControls) => {
     // Handle asset alignment
     if (selectedAssetId && selectedId) {
@@ -972,39 +1003,41 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const transform = asset[orientation];
       const containerPos = container[orientation];
 
-      // Calculate new position based on alignment
-      let newX = transform.position.x;
-      let newY = transform.position.y;
+      // Keep current positions
+      const currentX = transform.position.x;
+      const currentY = transform.position.y;
+      let newX = currentX;
+      let newY = currentY;
 
-      // If reference is container, align relative to container
       if (transform.position.reference === 'container') {
-        // For container-relative positioning, we don't need to adjust for origin
-        // since the positions are already normalized (0-1)
-        switch (alignment.horizontal) {
-          case 'left':
-            newX = 0;  // Left edge of container
-            break;
-          case 'center':
-            newX = 0.5;  // Center of container
-            break;
-          case 'right':
-            newX = 1;  // Right edge of container
-            break;
-        }
-
-        switch (alignment.vertical) {
-          case 'top':
-            newY = 0;  // Top edge of container
-            break;
-          case 'middle':
-            newY = 0.5;  // Middle of container
-            break;
-          case 'bottom':
-            newY = 1;  // Bottom edge of container
-            break;
+        // Handle container-relative positioning
+        if (alignment.horizontal) {
+          switch (alignment.horizontal) {
+            case 'left':
+              newX = 0;
+              break;
+            case 'center':
+              newX = 0.5;
+              break;
+            case 'right':
+              newX = 1;
+              break;
+          }
+        } else if (alignment.vertical) {
+          switch (alignment.vertical) {
+            case 'top':
+              newY = 0;
+              break;
+            case 'middle':
+              newY = 0.5;
+              break;
+            case 'bottom':
+              newY = 1;
+              break;
+          }
         }
       } else {
-        // If reference is another asset, align relative to that asset
+        // Handle asset-relative positioning
         const refAsset = container.assets[transform.position.reference];
         if (!refAsset) return;
 
@@ -1012,45 +1045,43 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
         const refOrigin = calculateOriginPoint(selectedId, refAsset.id, refTransform);
         if (!refOrigin) return;
 
-        // Get reference asset dimensions
-        const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
+        const refDimensions = assetDimensionsRef.current[refAsset.id] || 
+                           { width: containerPos.width, height: containerPos.height };
 
-        // Calculate the asset's current position in absolute coordinates
-        const currentOrigin = calculateOriginPoint(selectedId, selectedAssetId, transform);
-        if (!currentOrigin) return;
-
-        // Calculate new position relative to reference asset
-        switch (alignment.horizontal) {
-          case 'left':
-            newX = (refOrigin.x - containerPos.x + containerPos.width/2) / refDimensions.width;
-            break;
-          case 'center':
-            newX = (refOrigin.x + refDimensions.width/2 - containerPos.x + containerPos.width/2) / refDimensions.width;
-            break;
-          case 'right':
-            newX = (refOrigin.x + refDimensions.width - containerPos.x + containerPos.width/2) / refDimensions.width;
-            break;
-        }
-
-        switch (alignment.vertical) {
-          case 'top':
-            newY = (refOrigin.y - containerPos.y + containerPos.height/2) / refDimensions.height;
-            break;
-          case 'middle':
-            newY = (refOrigin.y + refDimensions.height/2 - containerPos.y + containerPos.height/2) / refDimensions.height;
-            break;
-          case 'bottom':
-            newY = (refOrigin.y + refDimensions.height - containerPos.y + containerPos.height/2) / refDimensions.height;
-            break;
+        if (alignment.horizontal) {
+          switch (alignment.horizontal) {
+            case 'left':
+              newX = (refOrigin.x - containerPos.x + containerPos.width/2) / refDimensions.width;
+              break;
+            case 'center':
+              newX = (refOrigin.x + refDimensions.width/2 - containerPos.x + containerPos.width/2) / refDimensions.width;
+              break;
+            case 'right':
+              newX = (refOrigin.x + refDimensions.width - containerPos.x + containerPos.width/2) / refDimensions.width;
+              break;
+          }
+        } else if (alignment.vertical) {
+          switch (alignment.vertical) {
+            case 'top':
+              newY = (refOrigin.y - containerPos.y + containerPos.height/2) / refDimensions.height;
+              break;
+            case 'middle':
+              newY = (refOrigin.y + refDimensions.height/2 - containerPos.y + containerPos.height/2) / refDimensions.height;
+              break;
+            case 'bottom':
+              newY = (refOrigin.y + refDimensions.height - containerPos.y + containerPos.height/2) / refDimensions.height;
+              break;
+          }
         }
       }
 
+      // Only update the position that changed
       const updates = {
         ...transform,
         position: {
           ...transform.position,
-          x: newX,
-          y: newY
+          x: alignment.horizontal ? newX : currentX,
+          y: alignment.vertical ? newY : currentY
         }
       };
 
@@ -1061,29 +1092,35 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const updateDependentAssets = (assetId: string) => {
         Object.entries(container.assets).forEach(([id, dependentAsset]) => {
           if (dependentAsset[orientation].position.reference === assetId) {
-            updateAsset(selectedId, id, dependentAsset[orientation], orientation);
+            const currentTransform = dependentAsset[orientation];
+            // Only update the axis that changed in the reference
+            const updates = {
+              ...currentTransform,
+              position: {
+                ...currentTransform.position,
+                x: alignment.horizontal ? currentTransform.position.x : currentTransform.position.x,
+                y: alignment.vertical ? currentTransform.position.y : currentTransform.position.y
+              }
+            };
+            updateAsset(selectedId, id, updates, orientation);
             updateDependentAssets(id);
           }
         });
       };
 
-      // Start the cascade of updates from the aligned asset
       updateDependentAssets(selectedAssetId);
       return;
     }
 
-    // Handle container alignment (existing logic)
+    // Handle container alignment
     if (!selectedId) return;
 
     const element = containers.find(c => c.id === selectedId);
     if (!element) return;
 
-    // Get reference element (parent container or device frame)
     const parent = element.parentId ? containers.find(c => c.id === element.parentId) : null;
-    
-    // Store original position before alignment
     const oldPos = element[orientation];
-    
+
     // If no parent, align to device frame
     if (!parent) {
       const elementRef: AlignmentReference = {
@@ -1094,41 +1131,59 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
 
       const newPosition = calculateAlignedPosition(elementRef, deviceFrameRef, alignment);
       
-      // Calculate the delta movement
-      const deltaX = newPosition.x - oldPos.x;
-      const deltaY = newPosition.y - oldPos.y;
+      // Calculate deltas only for the changed axis
+      const deltaX = newPosition.x !== undefined ? newPosition.x - oldPos.x : 0;
+      const deltaY = newPosition.y !== undefined ? newPosition.y - oldPos.y : 0;
       
-      // Update the container
-      updateContainer(selectedId, newPosition, orientation);
+      // Update container with only the changed coordinates
+      const updates: Partial<Position> = {
+        ...oldPos,  // Preserve existing position
+        ...(newPosition.x !== undefined ? { x: newPosition.x } : {}),
+        ...(newPosition.y !== undefined ? { y: newPosition.y } : {})
+      };
+      
+      updateContainer(selectedId, updates, orientation);
 
       // Update dependent containers recursively
       const updateDependentContainers = (parentId: string) => {
         containers.forEach(childContainer => {
           if (childContainer.parentId === parentId) {
-            // Move child by the same delta as parent
             const childPos = childContainer[orientation];
-            updateContainer(childContainer.id, {
-              x: childPos.x + deltaX,
-              y: childPos.y + deltaY,
-            }, orientation);
+            const childUpdates: Partial<Position> = {
+              ...childPos,  // Preserve existing position
+              ...(deltaX !== 0 ? { x: childPos.x + deltaX } : {}),
+              ...(deltaY !== 0 ? { y: childPos.y + deltaY } : {})
+            };
+            
+            updateContainer(childContainer.id, childUpdates, orientation);
 
             // Update all assets in this container
             Object.entries(childContainer.assets).forEach(([assetId, asset]) => {
-              updateAsset(childContainer.id, assetId, asset[orientation], orientation);
+              const assetTransform = asset[orientation];
+              if (assetTransform.position.reference === 'container') {
+                // Only update container-relative assets for the changed axis
+                const assetUpdates = {
+                  ...assetTransform,
+                  position: {
+                    ...assetTransform.position,
+                    ...(deltaX !== 0 ? { x: assetTransform.position.x } : {}),
+                    ...(deltaY !== 0 ? { y: assetTransform.position.y } : {})
+                  }
+                };
+                updateAsset(childContainer.id, assetId, assetUpdates, orientation);
+              }
             });
 
-            // Recursively update this container's children
             updateDependentContainers(childContainer.id);
           }
         });
       };
 
-      // Start the cascade of updates from the aligned container
       updateDependentContainers(selectedId);
       return;
     }
 
-    // Rest of existing container alignment logic...
+    // Handle alignment to parent container
     const elementRef: AlignmentReference = {
       id: element.id,
       position: element[orientation],
@@ -1143,38 +1198,59 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
 
     const newPosition = calculateAlignedPosition(elementRef, parentRef, alignment);
     
-    // Calculate the delta movement
-    const deltaX = newPosition.x - oldPos.x;
-    const deltaY = newPosition.y - oldPos.y;
+    // Calculate deltas only for the changed axis
+    const deltaX = newPosition.x !== undefined ? newPosition.x - oldPos.x : 0;
+    const deltaY = newPosition.y !== undefined ? newPosition.y - oldPos.y : 0;
     
-    // Update the container
-    updateContainer(selectedId, newPosition, orientation);
+    // Update container with only the changed coordinates
+    const updates: Partial<Position> = {
+      ...oldPos,  // Preserve existing position
+      ...(newPosition.x !== undefined ? { x: newPosition.x } : {}),
+      ...(newPosition.y !== undefined ? { y: newPosition.y } : {})
+    };
+    
+    updateContainer(selectedId, updates, orientation);
 
     // Update dependent containers recursively
     const updateDependentContainers = (parentId: string) => {
       containers.forEach(childContainer => {
         if (childContainer.parentId === parentId) {
-          // Move child by the same delta as parent
           const childPos = childContainer[orientation];
-          updateContainer(childContainer.id, {
-            x: childPos.x + deltaX,
-            y: childPos.y + deltaY,
-          }, orientation);
+          const childUpdates: Partial<Position> = {
+            ...childPos,  // Preserve existing position
+            ...(deltaX !== 0 ? { x: childPos.x + deltaX } : {}),
+            ...(deltaY !== 0 ? { y: childPos.y + deltaY } : {})
+          };
+          
+          updateContainer(childContainer.id, childUpdates, orientation);
 
           // Update all assets in this container
           Object.entries(childContainer.assets).forEach(([assetId, asset]) => {
-            updateAsset(childContainer.id, assetId, asset[orientation], orientation);
+            const assetTransform = asset[orientation];
+            if (assetTransform.position.reference === 'container') {
+              // Only update container-relative assets for the changed axis
+              const assetUpdates = {
+                ...assetTransform,
+                position: {
+                  ...assetTransform.position,
+                  ...(deltaX !== 0 ? { x: assetTransform.position.x } : {}),
+                  ...(deltaY !== 0 ? { y: assetTransform.position.y } : {})
+                }
+              };
+              updateAsset(childContainer.id, assetId, assetUpdates, orientation);
+            }
           });
 
-          // Recursively update this container's children
           updateDependentContainers(childContainer.id);
         }
       });
     };
 
-    // Start the cascade of updates from the aligned container
     updateDependentContainers(selectedId);
   };
+
+  // Add lastPositionRef near other refs
+  const lastPositionRef = useRef<{x: number, y: number} | null>(null);
 
   return (
     <div 
@@ -1260,6 +1336,19 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               scaleX={1}
               scaleY={1}
             >
+              {/* Device bounds indicator in infinite mode - Moved to top of group but with listening={false} */}
+              {isInfinite && (
+                <Rect
+                  width={width}
+                  height={height}
+                  stroke="#7aa2f7"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  fill="transparent"
+                  listening={false}
+                />
+              )}
+              
               {/* Containers */}
               {containers.map(renderContainer)}
 
@@ -1275,18 +1364,6 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                     return newBox;
                   }}
                   keepRatio={selectedAssetId ? containers.find(c => c.id === selectedId)?.assets[selectedAssetId]?.[orientation].maintainAspectRatio : false}
-                />
-              )}
-
-              {/* Device bounds indicator in infinite mode */}
-              {isInfinite && (
-                <Rect
-                  width={width}
-                  height={height}
-                  stroke="#7aa2f7"
-                  strokeWidth={2}
-                  dash={[5, 5]}
-                  fill="transparent"
                 />
               )}
             </Group>

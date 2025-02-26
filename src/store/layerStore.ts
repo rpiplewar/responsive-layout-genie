@@ -41,6 +41,7 @@ export interface LayerNode {
   type: 'container' | 'asset';
   isExpanded: boolean;
   isVisible: boolean;
+  isLocked: boolean;
   children: LayerNode[];
   parentId: string | null;
   level: number;
@@ -94,6 +95,7 @@ export const useLayerStore = create<LayerState>((set, get) => ({
         type: 'container',
         isExpanded: state.expandedLayers.has(container.id),
         isVisible: state.layerVisibility.get(container.id) ?? true,
+        isLocked: container.isLocked ?? false,
         children: [],
         parentId: container.parentId || null,
         level
@@ -113,6 +115,7 @@ export const useLayerStore = create<LayerState>((set, get) => ({
           type: 'asset',
           isExpanded: false,
           isVisible: asset.portrait.isVisible ?? true,
+          isLocked: asset.isLocked ?? false,
           children: [],
           parentId: container.id,
           level: level + 1

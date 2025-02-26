@@ -10,8 +10,8 @@ export interface AlignmentGuide {
 }
 
 export interface AlignmentControls {
-  horizontal: AlignmentType;
-  vertical: AlignmentType;
+  horizontal?: AlignmentType;
+  vertical?: AlignmentType;
 }
 
 interface AlignmentOperation {

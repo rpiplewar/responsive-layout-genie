@@ -88,38 +88,30 @@ export const PropertiesPanel = () => {
 
   return (
     <div className="w-64 bg-editor-bg p-4 border-l border-editor-grid space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Properties</h3>
-        {selectedContainer && !selectedAssetId && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-red-500 hover:text-red-400"
-            onClick={() => deleteContainer(selectedId!)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-        {selectedAssetId && (
-          <div className="flex gap-1">
+        <div className="flex gap-2">
+          {selectedContainer && (
             <Button
               variant="ghost"
               size="icon"
-              className="text-gray-400 hover:text-editor-accent"
-              onClick={() => duplicateAsset(selectedId!, selectedAssetId)}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-red-500 hover:text-red-400"
-              onClick={() => deleteAsset(selectedId!, selectedAssetId)}
+              onClick={() => deleteContainer(selectedContainer.id)}
+              title="Delete Container"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-          </div>
-        )}
+          )}
+          {selectedAsset && selectedContainer && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => deleteAsset(selectedContainer.id, selectedAsset.id)}
+              title="Delete Asset"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {containerPath.length > 0 && (
@@ -127,9 +119,11 @@ export const PropertiesPanel = () => {
           {containerPath.map((container, index) => (
             <React.Fragment key={container.id}>
               <BreadcrumbItem>
-                <BreadcrumbLink 
+                <BreadcrumbLink
                   onClick={() => setSelectedId(container.id)}
-                  className="text-sm text-gray-400 hover:text-white cursor-pointer"
+                  className={`cursor-pointer ${
+                    container.id === selectedId ? 'text-white' : 'text-gray-400'
+                  }`}
                 >
                   {container.name}
                 </BreadcrumbLink>

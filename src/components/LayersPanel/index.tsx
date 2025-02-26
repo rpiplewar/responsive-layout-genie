@@ -1,8 +1,9 @@
 import React from 'react';
 import { useLayerStore, LayerNode, DropPosition } from '@/store/layerStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronRight, ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { ChevronRight, ChevronDown, Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLayoutStore } from '@/store/layoutStore';
 
 interface LayerItemProps {
   id: string;
@@ -11,12 +12,14 @@ interface LayerItemProps {
   isExpanded: boolean;
   isVisible: boolean;
   isSelected: boolean;
+  isLocked: boolean;
   hasChildren: boolean;
   isDragging: boolean;
   isDropTarget: boolean;
   dropPosition: DropPosition;
   onToggleExpand: (id: string) => void;
   onToggleVisibility: (id: string) => void;
+  onToggleLock: (id: string) => void;
   onSelect: (id: string, event: React.MouseEvent) => void;
   type: string;
 }
@@ -28,18 +31,24 @@ const LayerItem: React.FC<LayerItemProps> = ({
   isExpanded,
   isVisible,
   isSelected,
+  isLocked,
   hasChildren,
   isDragging,
   isDropTarget,
   dropPosition,
   onToggleExpand,
   onToggleVisibility,
+  onToggleLock,
   onSelect,
   type,
 }) => {
   const { startDrag, updateDrag, endDrag } = useLayerStore();
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (isLocked) {
+      e.preventDefault();
+      return;
+    }
     e.stopPropagation();
     startDrag(id);
     e.dataTransfer.setData('text/plain', id);
@@ -86,14 +95,17 @@ const LayerItem: React.FC<LayerItemProps> = ({
         isSelected && 'bg-editor-accent/20',
         isDragging && 'opacity-50',
         isDropTarget && dropPosition === 'inside' && 'bg-editor-accent/10',
-        'hover:bg-editor-accent/10'
+        isLocked && 'bg-editor-grid/10',
+        'hover:bg-editor-accent/10',
+        isLocked && 'cursor-not-allowed'
       )}
       style={{ paddingLeft: `${(level + 1) * 16}px` }}
       onClick={(e) => onSelect(id, e)}
-      draggable
+      draggable={!isLocked}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      title={isLocked ? `${type === 'container' ? 'Container' : 'Asset'} is locked - Cannot be moved or modified` : undefined}
     >
       {/* Drop indicators */}
       {isDropTarget && dropPosition === 'before' && (
@@ -128,6 +140,7 @@ const LayerItem: React.FC<LayerItemProps> = ({
           e.stopPropagation();
           onToggleVisibility(id);
         }}
+        title={isVisible ? 'Hide layer' : 'Show layer'}
       >
         {isVisible ? (
           <Eye className="h-4 w-4" />
@@ -135,9 +148,27 @@ const LayerItem: React.FC<LayerItemProps> = ({
           <EyeOff className="h-4 w-4" />
         )}
       </button>
+      <button
+        className={cn(
+          "p-1 hover:bg-editor-accent/50 rounded",
+          isLocked ? 'text-editor-accent' : 'text-white'
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleLock(id);
+        }}
+        title={isLocked ? 'Unlock layer' : 'Lock layer'}
+      >
+        {isLocked ? (
+          <Lock className="h-4 w-4" />
+        ) : (
+          <Unlock className="h-4 w-4" />
+        )}
+      </button>
       <span className={cn(
         "ml-2",
-        type === 'asset' && 'text-white/70 text-sm'
+        type === 'asset' && 'text-white/70 text-sm',
+        isLocked && 'text-white/50'
       )}>{name}</span>
     </div>
   );
@@ -148,8 +179,9 @@ const LayerTree: React.FC<{
   selectedId: string | null;
   onToggleExpand: (id: string) => void;
   onToggleVisibility: (id: string) => void;
+  onToggleLock: (id: string) => void;
   onSelect: (id: string, event: React.MouseEvent) => void;
-}> = ({ nodes, selectedId, onToggleExpand, onToggleVisibility, onSelect }) => {
+}> = ({ nodes, selectedId, onToggleExpand, onToggleVisibility, onToggleLock, onSelect }) => {
   const { dragState } = useLayerStore();
 
   return (
@@ -162,6 +194,7 @@ const LayerTree: React.FC<{
             level={node.level}
             isExpanded={node.isExpanded}
             isVisible={node.isVisible}
+            isLocked={node.isLocked}
             isSelected={node.id === selectedId}
             hasChildren={node.children.length > 0}
             isDragging={node.id === dragState.draggingId}
@@ -169,6 +202,7 @@ const LayerTree: React.FC<{
             dropPosition={node.id === dragState.dropTargetId ? dragState.dropPosition : null}
             onToggleExpand={onToggleExpand}
             onToggleVisibility={onToggleVisibility}
+            onToggleLock={onToggleLock}
             onSelect={(id, event) => onSelect(id, event)}
             type={node.type}
           />
@@ -178,6 +212,7 @@ const LayerTree: React.FC<{
               selectedId={selectedId}
               onToggleExpand={onToggleExpand}
               onToggleVisibility={onToggleVisibility}
+              onToggleLock={onToggleLock}
               onSelect={(id, event) => onSelect(id, event)}
             />
           )}
@@ -198,6 +233,21 @@ export const LayersPanel: React.FC = () => {
     endDrag,
     dragState
   } = useLayerStore();
+
+  const { toggleContainerLock, toggleAssetLock } = useLayoutStore();
+
+  const handleToggleLock = (id: string) => {
+    const node = getLayerHierarchy().find(n => n.id === id) || 
+                getLayerHierarchy().flatMap(n => n.children).find(n => n.id === id);
+    
+    if (node) {
+      if (node.type === 'container') {
+        toggleContainerLock(id);
+      } else {
+        toggleAssetLock(node.parentId!, id);
+      }
+    }
+  };
 
   const layers = getLayerHierarchy();
 
@@ -273,6 +323,7 @@ export const LayersPanel: React.FC = () => {
                 selectedId={selectedId}
                 onToggleExpand={toggleLayerExpansion}
                 onToggleVisibility={toggleLayerVisibility}
+                onToggleLock={handleToggleLock}
                 onSelect={(id, event) => selectLayer(id, event)}
               />
               {/* Root level drop indicator */}

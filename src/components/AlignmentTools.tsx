@@ -10,11 +10,11 @@ interface AlignmentToolsProps {
 
 export const AlignmentTools: React.FC<AlignmentToolsProps> = ({ selectedIds, onAlign }) => {
   const alignHorizontal = (type: AlignmentType) => {
-    onAlign({ horizontal: type, vertical: 'middle' });
+    onAlign({ horizontal: type });
   };
 
   const alignVertical = (type: AlignmentType) => {
-    onAlign({ horizontal: 'center', vertical: type });
+    onAlign({ vertical: type });
   };
 
   if (selectedIds.length === 0) return null;

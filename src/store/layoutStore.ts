@@ -38,6 +38,7 @@ export interface Asset {
   key: string;
   portrait: AssetTransform;
   landscape: AssetTransform;
+  isLocked?: boolean;
 }
 
 export interface Container {
@@ -47,6 +48,7 @@ export interface Container {
   landscape: ContainerPosition;
   parentId?: string;
   assets: { [key: string]: Asset };
+  isLocked?: boolean;
 }
 
 export interface AssetMetadata {
@@ -130,6 +132,8 @@ export interface LayoutState {
   canRedo: () => boolean;
   reorderContainer: (containerId: string, targetId: string, position: 'before' | 'after' | 'inside') => void;
   updateContainerParent: (containerId: string, newParentId: string | null) => void;
+  toggleContainerLock: (id: string) => void;
+  toggleAssetLock: (containerId: string, assetId: string) => void;
 }
 
 interface NestedContainer {
@@ -857,5 +861,38 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         } : null
       }
     });
+  },
+
+  toggleContainerLock: (id: string) => {
+    const container = get().containers.find(c => c.id === id);
+    if (!container) return;
+
+    const newContainers = get().containers.map(c => 
+      c.id === id 
+        ? { ...c, isLocked: !c.isLocked }
+        : c
+    );
+    get().saveToHistory(newContainers);
+  },
+
+  toggleAssetLock: (containerId: string, assetId: string) => {
+    const container = get().containers.find(c => c.id === containerId);
+    if (!container || !container.assets[assetId]) return;
+
+    const newContainers = get().containers.map(c => 
+      c.id === containerId 
+        ? {
+            ...c,
+            assets: {
+              ...c.assets,
+              [assetId]: {
+                ...c.assets[assetId],
+                isLocked: !c.assets[assetId].isLocked
+              }
+            }
+          }
+        : c
+    );
+    get().saveToHistory(newContainers);
   },
 }));

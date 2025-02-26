@@ -7,46 +7,49 @@ interface Element {
   size: Size;
 }
 
+interface AlignmentResult {
+  x?: number;  // Optional - only present for horizontal alignment
+  y?: number;  // Optional - only present for vertical alignment
+}
+
 export const calculateAlignedPosition = (
   element: Element,
   reference: Element,
   alignment: AlignmentControls
-): Position => {
-  const newPosition = { ...element.position };
+): AlignmentResult => {
+  const result: AlignmentResult = {};
 
-  // Horizontal alignment - accounting for center-based positioning
-  switch (alignment.horizontal) {
-    case 'left':
-      // Align left edges, accounting for center-based positions
-      newPosition.x = reference.position.x - reference.size.width/2 + element.size.width/2;
-      break;
-    case 'center':
-      // Center alignment is already correct since positions are center-based
-      newPosition.x = reference.position.x;
-      break;
-    case 'right':
-      // Align right edges, accounting for center-based positions
-      newPosition.x = reference.position.x + reference.size.width/2 - element.size.width/2;
-      break;
+  // Only calculate horizontal position if horizontal alignment is specified
+  if (alignment.horizontal) {
+    switch (alignment.horizontal) {
+      case 'left':
+        result.x = reference.position.x - reference.size.width/2 + element.size.width/2;
+        break;
+      case 'center':
+        result.x = reference.position.x;
+        break;
+      case 'right':
+        result.x = reference.position.x + reference.size.width/2 - element.size.width/2;
+        break;
+    }
   }
 
-  // Vertical alignment - accounting for center-based positioning
-  switch (alignment.vertical) {
-    case 'top':
-      // Align top edges, accounting for center-based positions
-      newPosition.y = reference.position.y - reference.size.height/2 + element.size.height/2;
-      break;
-    case 'middle':
-      // Middle alignment is already correct since positions are center-based
-      newPosition.y = reference.position.y;
-      break;
-    case 'bottom':
-      // Align bottom edges, accounting for center-based positions
-      newPosition.y = reference.position.y + reference.size.height/2 - element.size.height/2;
-      break;
+  // Only calculate vertical position if vertical alignment is specified
+  if (alignment.vertical) {
+    switch (alignment.vertical) {
+      case 'top':
+        result.y = reference.position.y - reference.size.height/2 + element.size.height/2;
+        break;
+      case 'middle':
+        result.y = reference.position.y;
+        break;
+      case 'bottom':
+        result.y = reference.position.y + reference.size.height/2 - element.size.height/2;
+        break;
+    }
   }
 
-  return newPosition;
+  return result;
 };
 
 export const calculateAlignmentGuides = (
