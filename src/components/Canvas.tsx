@@ -648,12 +648,12 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const refOrigin = calculateOriginPoint(containerId, refAsset.id, refTransform);
       if (!refOrigin) return null;
 
-      // Get the reference asset's dimensions from our cache
+      // Get the reference asset's dimensions
       const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
 
-      // Use reference asset's actual dimensions for relative positioning
-      const newX = (node.x() - refOrigin.x) / refDimensions.width;
-      const newY = (node.y() - refOrigin.y) / refDimensions.height;
+      // Calculate position relative to reference asset's center
+      const newX = (node.x() - refOrigin.x) / refDimensions.width + 0.5;
+      const newY = (node.y() - refOrigin.y) / refDimensions.height + 0.5;
 
       return { x: newX, y: newY };
     };
@@ -724,7 +724,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             const node = e.target;
             
             if (transform.position.reference === 'container') {
-              // Calculate position relative to container center
+              // Container reference logic remains unchanged
               const newX = (node.x() - containerPos.x) / containerPos.width + 0.5;
               const newY = (node.y() - containerPos.y) / containerPos.height + 0.5;
               
@@ -750,8 +750,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                 ...transform,
                 position: {
                   ...transform.position,
-                  x: newPos.x + 0.5,
-                  y: newPos.y + 0.5
+                  x: newPos.x,
+                  y: newPos.y
                 }
               };
               updateAsset(containerId, asset.id, updates, orientation);
