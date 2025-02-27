@@ -1037,39 +1037,33 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           }
         }
       } else {
-        // Handle asset-relative positioning
+        // Handle asset-relative positioning - Simplified to match properties panel
         const refAsset = container.assets[transform.position.reference];
         if (!refAsset) return;
 
-        const refTransform = refAsset[orientation];
-        const refOrigin = calculateOriginPoint(selectedId, refAsset.id, refTransform);
-        if (!refOrigin) return;
-
-        const refDimensions = assetDimensionsRef.current[refAsset.id] || 
-                           { width: containerPos.width, height: containerPos.height };
-
+        // Use same simple 0-1 positioning as container reference
         if (alignment.horizontal) {
           switch (alignment.horizontal) {
             case 'left':
-              newX = (refOrigin.x - containerPos.x + containerPos.width/2) / refDimensions.width;
+              newX = 0;
               break;
             case 'center':
-              newX = (refOrigin.x + refDimensions.width/2 - containerPos.x + containerPos.width/2) / refDimensions.width;
+              newX = 0.5;
               break;
             case 'right':
-              newX = (refOrigin.x + refDimensions.width - containerPos.x + containerPos.width/2) / refDimensions.width;
+              newX = 1;
               break;
           }
         } else if (alignment.vertical) {
           switch (alignment.vertical) {
             case 'top':
-              newY = (refOrigin.y - containerPos.y + containerPos.height/2) / refDimensions.height;
+              newY = 0;
               break;
             case 'middle':
-              newY = (refOrigin.y + refDimensions.height/2 - containerPos.y + containerPos.height/2) / refDimensions.height;
+              newY = 0.5;
               break;
             case 'bottom':
-              newY = (refOrigin.y + refDimensions.height - containerPos.y + containerPos.height/2) / refDimensions.height;
+              newY = 1;
               break;
           }
         }
