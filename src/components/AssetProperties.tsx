@@ -61,7 +61,7 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
                 aria-expanded={open}
                 className="w-full justify-between bg-editor-grid text-white border-editor-grid hover:bg-editor-accent/20"
               >
-                {asset.key ? assetMetadata[asset.key]?.name || asset.key : "Choose an asset..."}
+                {asset.key || "Choose an asset..."}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0">
@@ -90,7 +90,10 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
                           }}
                           className="cursor-pointer"
                         >
-                          {metadata.name || id}
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{id}</span>
+                            <span className="text-xs text-gray-400">{metadata.name}</span>
+                          </div>
                         </CommandItem>
                       ))}
                   </ScrollArea>
