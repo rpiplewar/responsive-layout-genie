@@ -4,8 +4,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from '@/components/ui/button';
-import { Upload } from 'lucide-react';
-import { useRef } from 'react';
+import { Upload, Search } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface AssetPropertiesProps {
   asset: Asset;
@@ -29,6 +32,8 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
   onImageUpload,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
 
   const handleAssetChange = (key: keyof AssetTransform, value: string | number | boolean | Record<string, unknown>, orientation: 'portrait' | 'landscape') => {
     onUpdateAsset(containerId, asset.id, { [key]: value }, orientation);
@@ -48,21 +53,51 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
       <div className="space-y-2">
         <Label className="text-gray-400">Select Asset</Label>
         <div className="flex gap-2">
-          <Select
-            value={asset.key}
-            onValueChange={(value) => onUpdateAssetKey(containerId, asset.id, value)}
-          >
-            <SelectTrigger className="bg-editor-grid text-white border-editor-grid flex-1">
-              <SelectValue placeholder="Choose an asset" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(assetMetadata).map(([id, metadata]) => (
-                <SelectItem key={id} value={id}>
-                  {id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="w-full justify-between bg-editor-grid text-white border-editor-grid hover:bg-editor-accent/20"
+              >
+                {asset.key ? assetMetadata[asset.key]?.name || asset.key : "Choose an asset..."}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0">
+              <Command>
+                <CommandInput 
+                  placeholder="Search assets..." 
+                  value={searchValue}
+                  onValueChange={setSearchValue}
+                  className="h-9"
+                />
+                <CommandEmpty>No assets found.</CommandEmpty>
+                <CommandGroup>
+                  <ScrollArea className="h-[200px]">
+                    {Object.entries(assetMetadata)
+                      .filter(([id, metadata]) => 
+                        metadata.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+                        id.toLowerCase().includes(searchValue.toLowerCase())
+                      )
+                      .map(([id, metadata]) => (
+                        <CommandItem
+                          key={id}
+                          value={id}
+                          onSelect={() => {
+                            onUpdateAssetKey(containerId, asset.id, id);
+                            setOpen(false);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {metadata.name || id}
+                        </CommandItem>
+                      ))}
+                  </ScrollArea>
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="outline"
             size="icon"

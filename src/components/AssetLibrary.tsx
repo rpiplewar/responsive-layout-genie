@@ -2,9 +2,10 @@ import { useLayoutStore } from '../store/layoutStore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Trash2, Copy, Replace, Edit2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, Copy, Replace, Edit2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useState, useRef } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,7 @@ export const AssetLibrary = () => {
   const { uploadedImages, assetMetadata, uploadImage, deleteAssetFromLibrary } = useLayoutStore();
   const { toast } = useToast();
   const [assetKey, setAssetKey] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [pendingReplace, setPendingReplace] = useState<{ key: string, file: File } | null>(null);
@@ -107,11 +109,23 @@ export const AssetLibrary = () => {
 
   return (
     <>
-      <div className="w-64 bg-editor-bg p-4 border-l border-editor-grid">
-        <div className="space-y-4">
+      <div className="w-64 bg-editor-bg border-l border-editor-grid flex flex-col max-h-screen overflow-hidden">
+        <div className="p-4 space-y-4 border-b border-editor-grid">
           <h3 className="font-medium text-white">Asset Library</h3>
           
-          <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search assets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 bg-editor-grid text-white border-editor-grid"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="p-4 space-y-4 border-b border-editor-grid">
             <div className="space-y-2">
               <Label htmlFor="asset-key" className="text-gray-400">Asset Key</Label>
               <Input
@@ -155,140 +169,152 @@ export const AssetLibrary = () => {
             )}
           </div>
 
-          <div className="space-y-2">
-            {Object.entries(uploadedImages).map(([id, src]) => {
-              const metadata = assetMetadata[id];
-              return (
-                <div 
-                  key={id}
-                  className="rounded-lg overflow-hidden border border-editor-grid bg-editor-grid/20"
-                >
-                  <div className="aspect-video relative">
-                    <img 
-                      src={src} 
-                      alt={metadata?.name || ''}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      {editingKey === id ? (
-                        <form 
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            if (newKey && newKey !== id) {
-                              if (uploadedImages[newKey]) {
-                                toast({
-                                  title: "Key already exists",
-                                  description: "Please choose a different key",
-                                  variant: "destructive",
-                                });
-                                return;
-                              }
-                              const oldData = uploadedImages[id];
-                              const oldMetadata = assetMetadata[id];
-                              uploadImage(newKey, new File([dataURItoBlob(oldData)], oldMetadata.name));
-                              deleteAssetFromLibrary(id);
-                              toast({
-                                title: "Asset key updated",
-                                description: `Key changed from ${id} to ${newKey}`,
-                              });
-                            }
-                            setEditingKey(null);
-                            setNewKey('');
-                          }}
-                          className="flex-1 mr-2"
-                        >
-                          <Input
-                            value={newKey}
-                            onChange={(e) => setNewKey(e.target.value)}
-                            className="h-6 text-sm bg-editor-grid/50"
-                            placeholder="Enter new key"
-                            autoFocus
-                          />
-                        </form>
-                      ) : (
-                        <p className="text-sm text-white truncate" title={id}>
-                          {id}
-                        </p>
-                      )}
-                      <div className="flex gap-1">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleFileChange(e, id)}
-                          id={`replace-${id}`}
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-2 w-56">
+              {Object.entries(uploadedImages)
+                .filter(([id, _]) => {
+                  const metadata = assetMetadata[id];
+                  const searchLower = searchQuery.toLowerCase();
+                  return (
+                    searchQuery === '' ||
+                    id.toLowerCase().includes(searchLower) ||
+                    metadata?.name.toLowerCase().includes(searchLower)
+                  );
+                })
+                .map(([id, src]) => {
+                  const metadata = assetMetadata[id];
+                  return (
+                    <div 
+                      key={id}
+                      className="rounded-lg overflow-hidden border border-editor-grid bg-editor-grid/20 max-w-full"
+                    >
+                      <div className="aspect-video relative">
+                        <img 
+                          src={src} 
+                          alt={metadata?.name || ''}
+                          className="w-full h-full object-cover"
                         />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-400 hover:text-editor-accent"
-                          onClick={() => {
-                            const input = document.getElementById(`replace-${id}`);
-                            if (input) {
-                              input.click();
-                            }
-                          }}
-                        >
-                          <Replace className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-400 hover:text-editor-accent"
-                          onClick={() => {
-                            navigator.clipboard.writeText(id);
-                            toast({
-                              title: "Asset key copied",
-                              description: "The asset key has been copied to your clipboard",
-                            });
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-400 hover:text-editor-accent"
-                          onClick={() => {
-                            if (editingKey === id) {
-                              setEditingKey(null);
-                              setNewKey('');
-                            } else {
-                              setEditingKey(id);
-                              setNewKey(id);
-                            }
-                          }}
-                        >
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-400 hover:text-red-400"
-                          onClick={() => {
-                            deleteAssetFromLibrary(id);
-                            toast({
-                              title: "Asset deleted",
-                              description: "The asset has been removed from the library",
-                            });
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                      </div>
+                      <div className="p-2 space-y-1">
+                        <div className="flex items-center justify-between">
+                          {editingKey === id ? (
+                            <form 
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                if (newKey && newKey !== id) {
+                                  if (uploadedImages[newKey]) {
+                                    toast({
+                                      title: "Key already exists",
+                                      description: "Please choose a different key",
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+                                  const oldData = uploadedImages[id];
+                                  const oldMetadata = assetMetadata[id];
+                                  uploadImage(newKey, new File([dataURItoBlob(oldData)], oldMetadata.name));
+                                  deleteAssetFromLibrary(id);
+                                  toast({
+                                    title: "Asset key updated",
+                                    description: `Key changed from ${id} to ${newKey}`,
+                                  });
+                                }
+                                setEditingKey(null);
+                                setNewKey('');
+                              }}
+                              className="flex-1 mr-2"
+                            >
+                              <Input
+                                value={newKey}
+                                onChange={(e) => setNewKey(e.target.value)}
+                                className="h-6 text-sm bg-editor-grid/50"
+                                placeholder="Enter new key"
+                                autoFocus
+                              />
+                            </form>
+                          ) : (
+                            <p className="text-sm text-white truncate" title={id}>
+                              {id}
+                            </p>
+                          )}
+                          <div className="flex gap-1">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleFileChange(e, id)}
+                              id={`replace-${id}`}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-editor-accent"
+                              onClick={() => {
+                                const input = document.getElementById(`replace-${id}`);
+                                if (input) {
+                                  input.click();
+                                }
+                              }}
+                            >
+                              <Replace className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-editor-accent"
+                              onClick={() => {
+                                navigator.clipboard.writeText(id);
+                                toast({
+                                  title: "Asset key copied",
+                                  description: "The asset key has been copied to your clipboard",
+                                });
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-editor-accent"
+                              onClick={() => {
+                                if (editingKey === id) {
+                                  setEditingKey(null);
+                                  setNewKey('');
+                                } else {
+                                  setEditingKey(id);
+                                  setNewKey(id);
+                                }
+                              }}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-400 hover:text-red-400"
+                              onClick={() => {
+                                deleteAssetFromLibrary(id);
+                                toast({
+                                  title: "Asset deleted",
+                                  description: "The asset has been removed from the library",
+                                });
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        {metadata?.dimensions && (
+                          <p className="text-xs text-gray-400">
+                            {metadata.dimensions.width} × {metadata.dimensions.height}px • {formatFileSize(metadata.size)}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {metadata?.dimensions && (
-                      <p className="text-xs text-gray-400">
-                        {metadata.dimensions.width} × {metadata.dimensions.height}px • {formatFileSize(metadata.size)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+            </div>
+          </ScrollArea>
         </div>
       </div>
 
