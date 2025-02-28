@@ -192,7 +192,7 @@ export const AssetLibrary = () => {
                         <img 
                           src={src} 
                           alt={metadata?.name || ''}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       </div>
                       <div className="p-2 space-y-1">
