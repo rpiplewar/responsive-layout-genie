@@ -68,7 +68,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     selectedAssetId,
     setSelectedAssetId,
     activeOrientation,
-    setActiveOrientation
+    setActiveOrientation,
+    getAbsoluteDepth
   } = useLayoutStore();
   
   const { guides, setGuides, clearGuides } = useAlignmentStore();
@@ -522,6 +523,24 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     };
   };
 
+  // Sort containers by depth before rendering
+  const sortedContainers = useMemo(() => {
+    return [...containers].sort((a, b) => {
+      const aDepth = getAbsoluteDepth(a.id);
+      const bDepth = getAbsoluteDepth(b.id);
+      return aDepth - bDepth; // Lower depth renders first
+    });
+  }, [containers, getAbsoluteDepth]);
+
+  // Sort assets by container
+  const getContainerSortedAssets = (container: Container) => {
+    return Object.values(container.assets).sort((a, b) => {
+      const aDepth = getAbsoluteDepth(container.id, a.id);
+      const bDepth = getAbsoluteDepth(container.id, b.id);
+      return aDepth - bDepth; // Lower depth renders first
+    });
+  };
+
   const renderContainer = (container: Container) => {
     const position = container[orientation];
     const x = position.x - position.width / 2;
@@ -529,6 +548,9 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     const isSelected = selectedId === container.id && !selectedAssetId;
     const hasParent = !!container.parentId;
     const isLocked = container.isLocked;
+    
+    // Get sorted assets for this container
+    const sortedAssets = getContainerSortedAssets(container);
     
     return (
       <Group key={container.id}>
@@ -577,7 +599,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           }}
         />
         <Group>
-          {Object.values(container.assets).map(asset => renderAsset(container.id, asset))}
+          {sortedAssets.map(asset => renderAsset(container.id, asset))}
         </Group>
       </Group>
     );
@@ -1343,8 +1365,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                 />
               )}
               
-              {/* Containers */}
-              {containers.map(renderContainer)}
+              {/* Render sorted containers */}
+              {sortedContainers.map(renderContainer)}
 
               {/* Transformer */}
               {(selectedId || selectedAssetId) && (

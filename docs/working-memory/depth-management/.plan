@@ -1,0 +1,289 @@
+# Depth Management Implementation Plan
+Created: Wed Mar 27 14:42:42 PDT 2024
+
+## Overview
+Implement depth management for containers and assets in the layout editor, allowing control over z-index and rendering order.
+
+## Current State Analysis
+- We have `level` property in Container and LayerNode interfaces
+- LayerPanel shows hierarchy but doesn't manage depth
+- Canvas renders objects in order of array position
+- No UI for depth control
+
+## Implementation Plan
+
+### Phase 1: Data Model Updates
+1. Add depth properties:
+   - Update Container interface to include `depth: number` 
+   - Update Asset interface to include `depth: number`
+   - Depth should be relative to parent or root if root level container
+   - Default depths:
+     - New containers: increment of 1 but it's relative to root or other root level containers
+    - New child: increment of 1 but it's relative to parent and other siblings
+     - New assets: increment of 1 but it's relative to parent and other siblings
+
+### Phase 2: Store Updates
+1. Modify layoutStore:
+   - Add depth management functions
+   - Update container/asset creation to handle depth
+   - Add depth update functions
+   - Implement depth conversion for Phaser export
+
+2. Update layerStore:
+   - Sort layers by depth within each level
+   - Update drag-drop to handle depth reordering
+
+### Phase 3: UI Implementation
+1. Properties Panel:
+   - Add relative depth input field and update depth when changed
+   - Updates when depth is changed from Layer drag and drop operations
+
+2. Layer Panel Updates:
+   - Sort items by depth within each level or parent or root
+   - Drag-drop updates depth automatically
+   - Updates when depth is changed from Properties Panel
+
+3. Canvas Updates:
+   - Render objects based on parent container and relative depth to each parent
+
+### Phase 4: Import/Export
+1. Update import/export to handle depth:
+   - Convert relative depths to absolute for Phaser
+   - Convert absolute to relative depth during import
+   - Handle depth conflicts by assigning new depth if there is a conflict
+
+## Technical Details
+
+### Depth System
+- Root containers: 1.0, 2.0, 3.0, etc.
+- Child containers: +1 relative to parent and siblings, 
+- Assets within container: +1 relative to parent and siblings, 
+- Example:
+  ```
+  Container A (1)
+    ├─ Asset A1 (1 Relative to parent Container A) Absolute Depth = 1.1
+    ├─ Asset A2 (2 Relative to parent Container A) Absolute Depth = 1.2
+    └─ Container A3 (3 Relative to parent Container A) Absolute Depth = 1.3
+        ├─ Asset A31 (1 Relative to parent Container A3) Absolute Depth = 1.31
+        └─ Asset A32 (2 Relative to parent Container A3) Absolute Depth = 1.32
+
+
+  Container B (2)
+    ├─ Asset B1 (1 Relative to parent Container B) Absolute Depth = 2.1 
+    ├─ Asset B2 (2 Relative to parent Container B) Absolute Depth = 2.2
+    └─ Container B3 (3 Relative to parent Container B) Absolute Depth = 2.3
+        ├─ Asset B31 (1 Relative to parent Container B3) Absolute Depth = 2.31
+        └─ Asset B32 (2 Relative to parent Container B3) Absolute Depth = 2.32
+        if more than 10 childs, then it will be 2.33, 2.34, 2.35, 2.36, 2.37, 2.38, 2.39, 2.391, 2.392, and so on
+  ```
+
+### Functions to Implement
+1. Depth Management:
+   - getNextAvailableDepth(parentId?: string)
+   - updateDepth(id: string, newDepth: number)
+   - getAbsoluteDepth(containerId: string, assetId?: string) converts by using decimal system. for eg check container B in the example above
+
+2. UI Helpers:
+   - formatDepthDisplay(depth: number)
+   - validateDepthInput(depth: number, parentId?: string)
+   - getDepthRange(parentId?: string)
+
+## Progress History
+1. Initial plan creation - Wed Mar 27 14:42:42 PDT 2024
+   - Analyzed current codebase
+   - Identified existing level property
+   - Created implementation plan
+
+## Next Steps
+1. [ ] Update Container and Asset interfaces
+2. [ ] Implement depth management functions in layoutStore
+3. [ ] Update LayerPanel to sort by depth
+4. [ ] Add depth controls to PropertiesPanel
+5. [ ] Update Canvas rendering order
+
+## Notes
+- Reuse existing level property for hierarchy display
+- Depth is separate from level (level = visual indent, depth = z-order)
+- Keep depth system simple but flexible for future extensions
+- Ensure backward compatibility with existing layouts
+
+## Implementation Approach (v2)
+
+### Core Data Structure
+```typescript
+interface DepthInfo {
+  relativePosition: number; // 0-1000 for easier understanding
+  parentId?: string;
+  absoluteDepthCache?: number; // Optional cache for performance
+}
+
+interface Container extends DepthInfo {
+  // ... existing fields ...
+}
+
+interface Asset extends DepthInfo {
+  // ... existing fields ...
+}
+```
+
+### Key Functions
+
+1. Depth Management (O(1) operations)
+```typescript
+const MAX_POSITION = 1000;
+const DEFAULT_GAP = 10;
+
+// Get position for new item at end of list
+function getNextPosition(siblings: DepthInfo[]): number {
+  if (siblings.length === 0) return MAX_POSITION / 2;
+  const lastPos = siblings[siblings.length - 1].relativePosition;
+  return Math.min(MAX_POSITION, lastPos + DEFAULT_GAP);
+}
+
+// Insert item between two others (always O(1))
+function getPositionBetween(prev: number, next: number): number {
+  const mid = Math.floor((prev + next) / 2);
+  if (mid === prev) {
+    // Space too tight, trigger rebalance
+    return rebalancePositions(siblings);
+  }
+  return mid;
+}
+
+// Rebalance when space runs out (rare operation)
+function rebalancePositions(siblings: DepthInfo[]): number {
+  const step = MAX_POSITION / (siblings.length + 1);
+  siblings.forEach((sibling, index) => {
+    sibling.relativePosition = Math.floor(step * (index + 1));
+  });
+  return step * (targetIndex + 1);
+}
+
+// Update item position when dragged
+function updatePosition(
+  item: DepthInfo,
+  targetIndex: number,
+  siblings: DepthInfo[]
+): number {
+  if (siblings.length === 0) return MAX_POSITION / 2;
+  if (targetIndex === 0) return siblings[0].relativePosition / 2;
+  if (targetIndex >= siblings.length) {
+    return Math.min(
+      MAX_POSITION,
+      siblings[siblings.length - 1].relativePosition + DEFAULT_GAP
+    );
+  }
+  return getPositionBetween(
+    siblings[targetIndex - 1].relativePosition,
+    siblings[targetIndex].relativePosition
+  );
+}
+```
+
+2. Export/Import Functions
+```typescript
+// Convert relative to absolute depth for Phaser
+function getAbsoluteDepth(
+  item: DepthInfo,
+  containers: Container[],
+  cache: Map<string, number>
+): number {
+  if (item.absoluteDepthCache !== undefined) {
+    return item.absoluteDepthCache;
+  }
+
+  if (cache.has(item.id)) {
+    return cache.get(item.id)!;
+  }
+
+  const parent = containers.find(c => c.id === item.parentId);
+  const parentDepth = parent 
+    ? getAbsoluteDepth(parent, containers, cache)
+    : 0;
+  
+  const absoluteDepth = parentDepth + (item.relativePosition / MAX_POSITION);
+  cache.set(item.id, absoluteDepth);
+  item.absoluteDepthCache = absoluteDepth;
+  
+  return absoluteDepth;
+}
+
+// Convert absolute to relative when importing
+function getRelativePosition(
+  absoluteDepth: number,
+  siblings: DepthInfo[]
+): number {
+  const relativeDepth = absoluteDepth - Math.floor(absoluteDepth);
+  return Math.floor(relativeDepth * MAX_POSITION);
+}
+```
+
+3. UI Helper Functions
+```typescript
+// Format depth for display
+function formatDepth(item: DepthInfo): string {
+  return Math.floor(item.relativePosition).toString();
+}
+
+// Validate new position input
+function validatePosition(
+  newPos: number,
+  siblings: DepthInfo[]
+): boolean {
+  return newPos >= 0 && newPos <= MAX_POSITION;
+}
+
+// Sort siblings by position
+function sortByPosition(items: DepthInfo[]): DepthInfo[] {
+  return [...items].sort((a, b) => a.relativePosition - b.relativePosition);
+}
+```
+
+### Implementation Notes
+
+1. Performance Optimizations:
+   - Using whole numbers (0-1000) for easier math
+   - Caching absolute depths
+   - Rebalancing only when necessary
+   - O(1) operations for all common tasks
+
+2. Risk Mitigation:
+   - Handles space exhaustion via rebalancing
+   - Validates all position updates
+   - Prevents circular references
+   - Maintains order during rebalancing
+
+3. Advantages over v1:
+   - More intuitive number range
+   - Better performance with caching
+   - Handles edge cases better
+   - More robust rebalancing
+
+4. Edge Cases Handled:
+   - Space exhaustion between items
+   - Large number of siblings
+   - Circular parent references
+   - Cache invalidation
+   - Import/export conversion
+
+## Implementation Sequence
+
+1. Phase 1: Data Model
+   - Add relativePosition and cache to interfaces
+   - Add validation functions
+   - Update creation functions with new range
+
+2. Phase 2: Core Functions
+   - Implement position management
+   - Add caching system
+   - Add rebalancing logic
+
+3. Phase 3: UI Updates
+   - Show whole numbers in UI
+   - Add reordering controls
+   - Handle drag-drop with new system
+
+4. Phase 4: Export/Import
+   - Convert to Phaser depths
+   - Handle cache updates
+   - Validate imported data

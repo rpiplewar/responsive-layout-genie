@@ -15,6 +15,12 @@ export interface Size {
 
 export interface ContainerPosition extends Position, Size {}
 
+export interface DepthInfo {
+  id: string;
+  depth: number; // 0-1000 for easier understanding
+  absoluteDepthCache?: number; // Optional cache for performance
+}
+
 export interface AssetReference {
   reference: 'container' | string;
   x: number;
@@ -31,7 +37,7 @@ export interface AssetTransform {
   isVisible?: boolean;
 }
 
-export interface Asset {
+export interface Asset extends DepthInfo {
   id: string;
   name: string;
   type: 'image';
@@ -41,7 +47,7 @@ export interface Asset {
   isLocked?: boolean;
 }
 
-export interface Container {
+export interface Container extends DepthInfo {
   id: string;
   name: string;
   portrait: ContainerPosition;
@@ -49,7 +55,7 @@ export interface Container {
   parentId?: string;
   assets: { [key: string]: Asset };
   isLocked?: boolean;
-  level: number;
+  level: number; // Keep level for visual hierarchy
 }
 
 export interface AssetMetadata {
@@ -70,6 +76,7 @@ interface ExportedAsset {
   key: string;
   portrait: AssetTransform & { isVisible: boolean };
   landscape: AssetTransform & { isVisible: boolean };
+  depth: number;
 }
 
 interface ExportedContainer {
@@ -85,6 +92,7 @@ interface ExportedContainer {
     width: number;
     height: number;
   };
+  depth: number;
   assets?: { [key: string]: ExportedAsset };
   children?: { [key: string]: ExportedContainer };
 }
@@ -135,14 +143,24 @@ export interface LayoutState {
   updateContainerParent: (containerId: string, newParentId: string | null) => void;
   toggleContainerLock: (id: string) => void;
   toggleAssetLock: (containerId: string, assetId: string) => void;
+  getNextAvailableDepth: (parentId?: string) => number;
+  updateDepth: (id: string, newDepth: number) => void;
+  getAbsoluteDepth: (containerId: string, assetId?: string) => number;
+  reorderDepth: (items: DepthInfo[], targetIndex: number) => void;
+  moveAsset: (assetId: string, sourceContainerId: string, targetContainerId: string) => void;
 }
 
 interface NestedContainer {
   portrait: ContainerPosition;
   landscape: ContainerPosition;
-  assets?: { [key: string]: Asset };
+  assets?: { [key: string]: ExportedAsset };
   children?: { [key: string]: NestedContainer };
+  depth: number;
 }
+
+// Constants for depth management
+const MAX_POSITION = 10000;
+const DEFAULT_GAP = 2;
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
   containers: [],
@@ -211,49 +229,39 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   },
 
   addContainer: (parentId?: string) => {
-    console.log('addContainer called with parentId:', parentId);
-    console.log('Current state:', {
-      selectedId: get().selectedId,
-      selectedAssetId: get().selectedAssetId
-    });
-    
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
-    console.log('Parent container found:', parent ? { id: parent.id, name: parent.name } : null);
-    
-    const parentPortrait = parent ? parent.portrait : null;
-    const parentLandscape = parent ? parent.landscape : null;
+    const newId = crypto.randomUUID();
     
     const newContainer: Container = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: `Container ${Date.now()}`,
       portrait: {
-        x: parentPortrait ? (parentPortrait.x + parentPortrait.width / 2) : 50,
-        y: parentPortrait ? (parentPortrait.y + parentPortrait.height / 2) : 50,
-        width: parentPortrait ? parentPortrait.width * 0.5 : 100,
-        height: parentPortrait ? parentPortrait.height * 0.5 : 100,
+        x: parent?.portrait ? (parent.portrait.x + parent.portrait.width / 2) : 50,
+        y: parent?.portrait ? (parent.portrait.y + parent.portrait.height / 2) : 50,
+        width: parent?.portrait ? parent.portrait.width * 0.5 : 100,
+        height: parent?.portrait ? parent.portrait.height * 0.5 : 100,
       },
       landscape: {
-        x: parentLandscape ? (parentLandscape.x + parentLandscape.width / 2) : 50,
-        y: parentLandscape ? (parentLandscape.y + parentLandscape.height / 2) : 50,
-        width: parentLandscape ? parentLandscape.width * 0.5 : 100,
-        height: parentLandscape ? parentLandscape.height * 0.5 : 100,
+        x: parent?.landscape ? (parent.landscape.x + parent.landscape.width / 2) : 50,
+        y: parent?.landscape ? (parent.landscape.y + parent.landscape.height / 2) : 50,
+        width: parent?.landscape ? parent.landscape.width * 0.5 : 100,
+        height: parent?.landscape ? parent.landscape.height * 0.5 : 100,
       },
       parentId,
       assets: {},
       level: parent ? parent.level + 1 : 0,
+      depth: get().getNextAvailableDepth(parentId)
     };
-
-    console.log('New container created:', { id: newContainer.id, name: newContainer.name, parentId: newContainer.parentId });
     
     try {
       const newContainers = [...get().containers, newContainer];
-      get().saveToHistory(newContainers);
-      
-      // Clear the selectedAssetId when creating a new container
-      set({ 
+      set((state) => ({
+        ...state,
+        containers: newContainers,
         selectedId: newContainer.id,
-        selectedAssetId: null 
-      });
+        selectedAssetId: null
+      }));
+      get().saveToHistory(newContainers);
     } catch (error) {
       console.error('Error creating container:', error);
     }
@@ -263,8 +271,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const container = get().containers.find(c => c.id === containerId);
     if (!container) return;
 
+    const newId = crypto.randomUUID();
     const newAsset: Asset = {
-      id: crypto.randomUUID(),
+      id: newId,
       name: `Asset ${Date.now()}`,
       type: 'image',
       key: '',
@@ -294,6 +303,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         rotation: 0,
         isVisible: true,
       },
+      depth: get().getNextAvailableDepth(containerId)
     };
 
     const newContainers = get().containers.map(c => 
@@ -301,17 +311,17 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         ? { ...c, assets: { ...c.assets, [newAsset.id]: newAsset } }
         : c
     );
+
+    set((state) => ({
+      ...state,
+      containers: newContainers,
+      selectedAssetId: newAsset.id
+    }));
+
     get().saveToHistory(newContainers);
     
-    // Update the selected asset ID
-    set({ selectedAssetId: newAsset.id });
-    
-    // Also update the layer store to select this asset
-    // We need to import this dynamically to avoid circular dependencies
     import('./layerStore').then(({ useLayerStore }) => {
-      // Force a sync first to ensure the new asset is in the layer hierarchy
       useLayerStore.getState().syncWithLayoutStore();
-      // Then select the new asset
       useLayerStore.getState().selectLayer(newAsset.id);
     });
   },
@@ -327,11 +337,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       ...sourceAsset,
       id: crypto.randomUUID(),
       name: `${sourceAsset.name} Copy`,
-      // Keep the same key as the source asset
       key: sourceAsset.key,
-      // Deep clone the transforms to avoid reference issues
       portrait: JSON.parse(JSON.stringify(sourceAsset.portrait)),
       landscape: JSON.parse(JSON.stringify(sourceAsset.landscape)),
+      depth: get().getNextAvailableDepth(containerId)
     };
 
     const newContainers = get().containers.map(c => 
@@ -341,10 +350,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     );
     get().saveToHistory(newContainers);
     
-    // Update the selected asset ID to the new copy
     set({ selectedAssetId: newAsset.id });
     
-    // Update the layer store to select the new asset
     import('./layerStore').then(({ useLayerStore }) => {
       useLayerStore.getState().syncWithLayoutStore();
       useLayerStore.getState().selectLayer(newAsset.id);
@@ -479,6 +486,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           width: container.landscape.width / device.height,
           height: container.landscape.height / device.width,
         },
+        depth: container.depth
       };
 
       if (Object.keys(container.assets).length > 0) {
@@ -487,6 +495,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           [id]: {
             ...asset,
             name: asset.name,
+            depth: asset.depth,
             portrait: {
               ...asset.portrait,
               isVisible: asset.portrait.isVisible ?? true
@@ -608,15 +617,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       level: number = 0
     ): Container[] => {
       const selectedDevice = devices[get().selectedDevice];
-      console.log('[debug] Flattening containers:', {
-        containerKeys: Object.keys(containers),
-        parentId,
-        level,
-        hasChildren: Object.values(containers).some(c => c.children && Object.keys(c.children).length > 0)
-      });
       
       return Object.entries(containers).flatMap(([name, container]) => {
         const id = crypto.randomUUID();
+
         const flatContainer: Container = {
           id,
           name,
@@ -637,7 +641,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             ...acc,
             [id]: {
               ...asset,
+              id,
               key: asset.name,
+              depth: asset.depth || 0,
               portrait: {
                 ...asset.portrait,
                 isVisible: asset.portrait.isVisible ?? true
@@ -648,17 +654,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
               }
             }
           }), {}) : {},
-          level // Add level information
+          level,
+          depth: container.depth || 0
         };
-
-        console.log('[debug] Created flat container:', {
-          id: flatContainer.id,
-          name: flatContainer.name,
-          parentId: flatContainer.parentId,
-          level: level,
-          assetCount: Object.keys(flatContainer.assets).length,
-          hasChildren: container.children && Object.keys(container.children).length > 0
-        });
 
         const children = container.children
           ? flattenContainers(container.children, id, level + 1)
@@ -668,18 +666,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       });
     };
 
-    // First, update the containers and metadata
     const flattened = flattenContainers(config.containers);
-    console.log('[debug] Final flattened containers:', {
-      totalContainers: flattened.length,
-      hierarchy: flattened.map(c => ({
-        id: c.id,
-        name: c.name,
-        parentId: c.parentId,
-        level: c.level,
-        assetCount: Object.keys(c.assets).length
-      }))
-    });
 
     set((state) => ({
       containers: flattened,
@@ -706,7 +693,6 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       selectedAssetId: null,
     }));
 
-    // Then, initialize uploadedImages with placeholder data
     set((state) => ({
       uploadedImages: {
         ...state.uploadedImages,
@@ -714,7 +700,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           if (container.assets) {
             Object.values(container.assets).forEach(asset => {
               if (asset.name && !state.uploadedImages[asset.name]) {
-                acc[asset.name] = ''; // Placeholder until the actual image is uploaded
+                acc[asset.name] = '';
               }
             });
           }
@@ -723,9 +709,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       }
     }));
 
-    // Force layer store sync after import
     import('./layerStore').then(({ useLayerStore }) => {
-      console.log('[debug] Triggering layer store sync after import');
       useLayerStore.getState().syncWithLayoutStore();
     });
   },
@@ -773,23 +757,37 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
     if (containerIndex === -1 || targetIndex === -1) return;
 
-    // Remove the container from its current position
     const [container] = containers.splice(containerIndex, 1);
 
-    // Update parent relationship if needed
     if (position === 'inside') {
       container.parentId = targetId;
+      const targetContainer = containers[targetIndex];
+      container.level = targetContainer.level + 1;
+      container.depth = state.getNextAvailableDepth(targetId);
+      console.log('Container moved inside:', {
+        containerId,
+        targetId,
+        newLevel: container.level,
+        newDepth: container.depth
+      });
     } else {
-      // If moving to root level, remove parent
       container.parentId = containers[targetIndex].parentId;
+      container.level = containers[targetIndex].level;
+      container.depth = state.getNextAvailableDepth(containers[targetIndex].parentId);
+      console.log('Container reordered:', {
+        containerId,
+        targetId,
+        position,
+        newLevel: container.level,
+        newDepth: container.depth
+      });
     }
 
-    // Insert at new position
     const newIndex = position === 'after' ? targetIndex + 1 : targetIndex;
     containers.splice(newIndex, 0, container);
 
-    // Save to history and update state
     state.saveToHistory(containers);
+    set({ containers });
   },
 
   updateContainerParent: (containerId: string, newParentId: string | null) => {
@@ -804,73 +802,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
     const container = containers[containerIndex];
     const oldParentId = container.parentId;
-    console.log('=== Updating Container Parent ===', {
-      containerId,
-      oldParentId,
-      newParentId,
-      containerBeforeUpdate: {
-        id: container.id,
-        parentId: container.parentId,
-        position: {
-          portrait: container.portrait,
-          landscape: container.landscape
-        }
-      }
-    });
-
-    // Get old parent for position calculations
+    
     const oldParent = oldParentId ? containers.find(c => c.id === oldParentId) : null;
     const newParent = newParentId ? containers.find(c => c.id === newParentId) : null;
 
-    // Calculate absolute positions before parent change
-    const absolutePortrait = oldParent ? {
-      x: container.portrait.x + oldParent.portrait.x,
-      y: container.portrait.y + oldParent.portrait.y,
-      width: container.portrait.width,
-      height: container.portrait.height
-    } : container.portrait;
-
-    const absoluteLandscape = oldParent ? {
-      x: container.landscape.x + oldParent.landscape.x,
-      y: container.landscape.y + oldParent.landscape.y,
-      width: container.landscape.width,
-      height: container.landscape.height
-    } : container.landscape;
-
-    // Calculate new relative positions
-    const newPortrait = newParent ? {
-      ...container.portrait,
-      x: absolutePortrait.x - newParent.portrait.x,
-      y: absolutePortrait.y - newParent.portrait.y
-    } : absolutePortrait;
-
-    const newLandscape = newParent ? {
-      ...container.landscape,
-      x: absoluteLandscape.x - newParent.landscape.x,
-      y: absoluteLandscape.y - newParent.landscape.y
-    } : absoluteLandscape;
-
-    // Update the container with new parent and positions
-    containers[containerIndex] = {
-      ...container,
-      parentId: newParentId || undefined,
-      portrait: newPortrait,
-      landscape: newLandscape
-    };
-
-    console.log('Container after parent update:', {
-      updatedContainer: {
-        id: containers[containerIndex].id,
-        parentId: containers[containerIndex].parentId,
-        position: {
-          portrait: containers[containerIndex].portrait,
-          landscape: containers[containerIndex].landscape
-        }
-      },
-      allContainers: containers.map(c => ({ id: c.id, parentId: c.parentId }))
-    });
-
-    // Verify no circular references
     const hasCircularRef = (containerId: string, parentId: string | undefined): boolean => {
       if (!parentId) return false;
       if (parentId === containerId) return true;
@@ -879,81 +814,89 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     };
 
     if (hasCircularRef(containerId, newParentId || undefined)) {
-      console.error('Circular reference detected:', {
-        containerId,
-        newParentId,
-        containers: containers.map(c => ({ id: c.id, parentId: c.parentId }))
-      });
+      console.error('Circular reference detected');
       return;
     }
 
-    // Save to history and update state
-    state.saveToHistory(containers);
-    console.log('Saved updated containers to history');
-
-    // Verify final state
-    const finalContainer = containers.find(c => c.id === containerId);
-    console.log('Final container state:', {
-      container: {
-        id: finalContainer?.id,
-        parentId: finalContainer?.parentId,
-        position: finalContainer ? {
-          portrait: finalContainer.portrait,
-          landscape: finalContainer.landscape
-        } : null
-      }
+    const newDepth = state.getNextAvailableDepth(newParentId);
+    console.log('Container parent update:', {
+      containerId,
+      oldParentId,
+      newParentId,
+      oldDepth: container.depth,
+      newDepth
     });
+
+    const absolutePortrait = oldParent ? {
+      x: container.portrait.x + (oldParent.portrait.x - oldParent.portrait.width / 2),
+      y: container.portrait.y + (oldParent.portrait.y - oldParent.portrait.height / 2),
+      width: container.portrait.width,
+      height: container.portrait.height
+    } : container.portrait;
+
+    const absoluteLandscape = oldParent ? {
+      x: container.landscape.x + (oldParent.landscape.x - oldParent.landscape.width / 2),
+      y: container.landscape.y + (oldParent.landscape.y - oldParent.landscape.height / 2),
+      width: container.landscape.width,
+      height: container.landscape.height
+    } : container.landscape;
+
+    const newPortrait = newParent ? {
+      x: absolutePortrait.x - (newParent.portrait.x - newParent.portrait.width / 2),
+      y: absolutePortrait.y - (newParent.portrait.y - newParent.portrait.height / 2),
+      width: absolutePortrait.width,
+      height: absolutePortrait.height
+    } : absolutePortrait;
+
+    const newLandscape = newParent ? {
+      x: absoluteLandscape.x - (newParent.landscape.x - newParent.landscape.width / 2),
+      y: absoluteLandscape.y - (newParent.landscape.y - newParent.landscape.height / 2),
+      width: absoluteLandscape.width,
+      height: absoluteLandscape.height
+    } : absoluteLandscape;
+
+    const newLevel = newParent ? (newParent.level + 1) : 0;
+
+    const updatedContainer = {
+      ...container,
+      parentId: newParentId,
+      level: newLevel,
+      depth: newDepth,
+      portrait: newPortrait,
+      landscape: newLandscape
+    };
+
+    const newContainers = containers.map(c =>
+      c.id === containerId ? updatedContainer : c
+    );
+
+    state.saveToHistory(newContainers);
+    set({ containers: newContainers });
   },
 
   toggleContainerLock: (id: string) => {
     const container = get().containers.find(c => c.id === id);
-    console.log('[debug] Toggling container lock:', {
-      containerId: id,
-      containerName: container?.name,
-      currentLockState: container?.isLocked,
-      containerData: container
-    });
-    
-    if (!container) {
-      console.error('[debug] Container not found:', id);
-      return;
-    }
+    if (!container) return;
 
     const newContainers = get().containers.map(c => 
       c.id === id 
         ? { 
             ...c, 
             isLocked: !c.isLocked,
-            // Also lock/unlock all assets in the container
             assets: Object.entries(c.assets).reduce((acc, [assetId, asset]) => ({
               ...acc,
               [assetId]: {
                 ...asset,
-                isLocked: !c.isLocked // Match container's new lock state
+                isLocked: !c.isLocked
               }
             }), {})
           }
         : c
     );
     
-    const updatedContainer = newContainers.find(c => c.id === id);
-    console.log('[debug] Container lock state updated:', {
-      containerId: id,
-      containerName: updatedContainer?.name,
-      oldLockState: container.isLocked,
-      newLockState: updatedContainer?.isLocked,
-      assetLockStates: updatedContainer ? Object.entries(updatedContainer.assets).map(([id, asset]) => ({
-        id,
-        name: asset.name,
-        isLocked: asset.isLocked
-      })) : []
-    });
-    
     get().saveToHistory(newContainers);
     
-    // Force layer store sync after lock state change
     import('./layerStore').then(({ useLayerStore }) => {
-      console.log('[debug] Triggering layer store sync after container lock change');
       useLayerStore.getState().syncWithLayoutStore();
     });
   },
@@ -961,33 +904,14 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   toggleAssetLock: (containerId: string, assetId: string) => {
     const state = get();
     const container = state.containers.find(c => c.id === containerId);
-    console.log('[debug] Attempting to toggle asset lock:', { 
-      containerId, 
-      containerName: container?.name,
-      assetId,
-      assetName: container?.assets[assetId]?.name,
-      currentLockState: container?.assets[assetId]?.isLocked ?? false,
-      containerLockState: container?.isLocked ?? false,
-      assetData: container?.assets[assetId]
-    });
     
     if (!container || !container.assets[assetId]) {
-      console.error('[debug] Container or asset not found:', { 
-        containerId, 
-        containerExists: !!container,
-        assetId,
-        availableAssets: container ? Object.keys(container.assets) : []
-      });
+      console.error('Container or asset not found');
       return;
     }
 
-    // If container is locked, we can't toggle individual assets
-    if (container.isLocked) {
-      console.log('[debug] Cannot toggle asset lock - container is locked');
-      return;
-    }
+    if (container.isLocked) return;
 
-    // Create a new container with the updated asset
     const updatedContainer = {
       ...container,
       assets: {
@@ -999,27 +923,145 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       }
     };
 
-    // Create new containers array with the updated container
     const newContainers = state.containers.map(c => 
       c.id === containerId ? updatedContainer : c
     );
     
-    console.log('[debug] Asset lock state updated:', {
-      containerId,
-      containerName: updatedContainer.name,
-      assetId,
-      assetName: updatedContainer.assets[assetId].name,
-      oldLockState: container.assets[assetId].isLocked ?? false,
-      newLockState: updatedContainer.assets[assetId].isLocked,
-      containerLockState: updatedContainer.isLocked
-    });
-    
-    // Save to history and update state
     state.saveToHistory(newContainers);
     
-    // Force layer store sync after lock state change
     import('./layerStore').then(({ useLayerStore }) => {
-      console.log('[debug] Triggering layer store sync after asset lock change');
+      useLayerStore.getState().syncWithLayoutStore();
+    });
+  },
+
+  getNextAvailableDepth: (parentId?: string) => {
+    const state = get();
+    const containers = state.containers;
+    
+    // Get all siblings (containers with same parent)
+    const siblings = containers.filter(c => c.parentId === parentId);
+    
+    // For root level (no parent), start at 2 and increment by 2
+    if (!parentId) {
+      const depths = siblings.map(c => c.depth);
+      const maxDepth = depths.length > 0 ? Math.max(...depths) : 0;
+      return maxDepth + 2;
+    }
+    
+    // For children, use increment of 1
+    const depths = siblings.map(c => c.depth);
+    const maxDepth = depths.length > 0 ? Math.max(...depths) : 0;
+    return maxDepth + 1;
+  },
+
+  updateDepth: (id: string, newDepth: number) => {
+    const state = get();
+    const containers = state.containers;
+    const containerIndex = containers.findIndex(c => c.id === id);
+    if (containerIndex === -1) return;
+
+    const container = containers[containerIndex];
+    const newContainers = containers.map(c =>
+      c.id === id ? { ...c, depth: newDepth } : c
+    );
+    state.saveToHistory(newContainers);
+  },
+
+  getAbsoluteDepth: (containerId: string, assetId?: string) => {
+    const state = get();
+    const containers = state.containers;
+    const container = containers.find(c => c.id === containerId);
+    if (!container) return 0;
+
+    // Build path from root to container
+    const path = [];
+    let current = container;
+    while (current) {
+      path.unshift(current);
+      current = current.parentId ? containers.find(c => c.id === current.parentId) : null;
+    }
+
+    // Calculate absolute depth using decimal system
+    let depth = path[0].depth;
+    for (let i = 1; i < path.length; i++) {
+      depth = depth + (path[i].depth / Math.pow(100, i));
+    }
+
+    // If we're getting depth for an asset, add it at the next decimal place
+    if (assetId) {
+      const asset = container.assets[assetId];
+      if (asset) {
+        depth = depth + (asset.depth / Math.pow(100, path.length));
+      }
+    }
+
+    return Number(depth.toFixed(4)); // Keep 4 decimal places for precision
+  },
+
+  reorderDepth: (items: DepthInfo[], targetIndex: number) => {
+    const state = get();
+    const containers = state.containers;
+    const newContainers = containers.map(c => ({
+      ...c,
+      depth: items.find(i => i.id === c.id)?.depth || 0
+    }));
+    state.saveToHistory(newContainers);
+  },
+
+  moveAsset: (assetId: string, sourceContainerId: string, targetContainerId: string) => {
+    const state = get();
+    const containers = [...state.containers];
+    
+    // Find source and target containers
+    const sourceContainer = containers.find(c => c.id === sourceContainerId);
+    const targetContainer = containers.find(c => c.id === targetContainerId);
+
+    if (!sourceContainer || !targetContainer) {
+      console.error('Source or target container not found:', { sourceContainerId, targetContainerId });
+      return;
+    }
+
+    // Get the asset from source container
+    const asset = sourceContainer.assets[assetId];
+    if (!asset) {
+      console.error('Asset not found:', assetId);
+      return;
+    }
+
+    // Calculate new depth for the asset in target container
+    const newDepth = state.getNextAvailableDepth(targetContainerId);
+
+    // Create updated asset with new depth
+    const updatedAsset = {
+      ...asset,
+      depth: newDepth
+    };
+
+    // Remove asset from source container and add to target container
+    const newContainers = containers.map(c => {
+      if (c.id === sourceContainerId) {
+        const { [assetId]: _, ...remainingAssets } = c.assets;
+        return { ...c, assets: remainingAssets };
+      }
+      if (c.id === targetContainerId) {
+        return { ...c, assets: { ...c.assets, [assetId]: updatedAsset } };
+      }
+      return c;
+    });
+
+    // Update state
+    set((state) => ({
+      ...state,
+      containers: newContainers,
+      selectedAssetId: assetId
+    }));
+
+    // Save to history
+    state.saveToHistory(newContainers);
+
+    // Force layer store sync
+    import('./layerStore').then(({ useLayerStore }) => {
+      console.log('[debug] Triggering layer store sync after asset move');
       useLayerStore.getState().syncWithLayoutStore();
     });
   },

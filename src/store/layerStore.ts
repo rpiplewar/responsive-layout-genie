@@ -45,6 +45,7 @@ export interface LayerNode {
   children: LayerNode[];
   parentId: string | null;
   level: number;
+  depth: number;
 }
 
 export const useLayerStore = create<LayerState>((set, get) => ({
@@ -89,27 +90,15 @@ export const useLayerStore = create<LayerState>((set, get) => ({
     // Build a map of parent-child relationships first
     const childrenMap = new Map<string, string[]>();
     state.containers.forEach(container => {
-      if (container.parentId) {
-        const children = childrenMap.get(container.parentId) || [];
+      const parentId = container.parentId;
+      if (parentId) {
+        const children = childrenMap.get(parentId) || [];
         children.push(container.id);
-        childrenMap.set(container.parentId, children);
+        childrenMap.set(parentId, children);
       }
     });
     
     const buildNode = (container: Container, level: number = 0): LayerNode => {
-      console.log('[debug] Building node for container:', {
-        id: container.id,
-        name: container.name,
-        isLocked: container.isLocked,
-        level,
-        parentId: container.parentId,
-        assetCount: Object.keys(container.assets).length,
-        assets: Object.entries(container.assets).map(([id, asset]) => ({
-          id,
-          name: asset.name,
-          isLocked: asset.isLocked
-        }))
-      });
 
       const node: LayerNode = {
         id: container.id,
@@ -120,30 +109,27 @@ export const useLayerStore = create<LayerState>((set, get) => ({
         isLocked: container.isLocked ?? false,
         children: [],
         parentId: container.parentId || null,
-        level
+        level,
+        depth: container.depth
       };
 
-      // First add child containers
+      // First add child containers (sorted by depth)
       const childContainerIds = childrenMap.get(container.id) || [];
-      childContainerIds.forEach(childId => {
-        const childContainer = state.containers.find(c => c.id === childId);
-        if (childContainer) {
-          node.children.push(buildNode(childContainer, level + 1));
-        }
+      const childContainers = childContainerIds
+        .map(childId => state.containers.find(c => c.id === childId))
+        .filter((c): c is Container => c !== undefined)
+        .sort((a, b) => b.depth - a.depth); // Higher depth on top
+
+      childContainers.forEach(childContainer => {
+        node.children.push(buildNode(childContainer, level + 1));
       });
 
-      // Then add assets with proper lock states
-      Object.entries(container.assets).forEach(([id, asset]) => {
-        console.log('[debug] Building node for asset:', {
-          id,
-          name: asset.name,
-          isLocked: asset.isLocked,
-          parentId: container.id,
-          level: level + 1,
-          containerLocked: container.isLocked
-        });
+      // Then add assets (sorted by depth)
+      const assets = Object.entries(container.assets)
+        .map(([id, asset]) => ({ id, asset }))
+        .sort((a, b) => b.asset.depth - a.asset.depth);
 
-        // If container is locked, all assets should be locked
+      assets.forEach(({ id, asset }) => {
         const isLocked = container.isLocked || asset.isLocked;
 
         node.children.push({
@@ -155,44 +141,26 @@ export const useLayerStore = create<LayerState>((set, get) => ({
           isLocked: isLocked,
           children: [],
           parentId: container.id,
-          level: level + 1
+          level: level + 1,
+          depth: asset.depth
         });
       });
 
       return node;
     };
 
-    // Only process root containers (those without parents)
-    const rootNodes = state.containers
+    // Process root containers (sorted by depth)
+    const rootContainers = state.containers
       .filter(container => !container.parentId)
-      .map(container => buildNode(container, 0));
+      .sort((a, b) => b.depth - a.depth); // Higher depth on top
 
-    console.log('[debug] Final hierarchy details:', {
-      totalNodes: rootNodes.length,
-      selectedId: state.selectedId,
-      rootNodes: rootNodes.map(node => ({
-        id: node.id,
-        name: node.name,
-        isLocked: node.isLocked,
-        childCount: node.children.length,
-        children: node.children.map(child => ({
-          id: child.id,
-          name: child.name,
-          type: child.type,
-          isLocked: child.isLocked,
-          parentId: child.parentId,
-          level: child.level
-        }))
-      }))
-    });
-
-    return rootNodes;
+    const hierarchy = rootContainers.map(container => buildNode(container, 0));
+    
+    return hierarchy;
   },
 
   // Selection handling that integrates with existing system
   selectLayer: (id: string | null, event?: React.MouseEvent | MouseEvent) => {
-    console.log('[debug] Layer selection attempt:', { id });
-    
     // Find the selected node to determine if it's an asset
     if (id) {
       const findNode = (nodes: LayerNode[]): LayerNode | null => {
@@ -209,33 +177,16 @@ export const useLayerStore = create<LayerState>((set, get) => ({
       
       const hierarchy = get().getLayerHierarchy();
       const selectedNode = findNode(hierarchy);
-      console.log('[debug] Found selected node:', { 
-        selectedNode,
-        nodeType: selectedNode?.type,
-        parentId: selectedNode?.parentId,
-        level: selectedNode?.level
-      });
       
       if (selectedNode) {
         const layoutStore = useLayoutStore.getState();
         
         if (selectedNode.type === 'asset') {
-          console.log('[debug] Selecting asset:', { 
-            parentId: selectedNode.parentId, 
-            assetId: selectedNode.id,
-            assetName: selectedNode.name,
-            level: selectedNode.level
-          });
           // If it's an asset, set both container ID and asset ID
           layoutStore.setSelectedId(selectedNode.parentId);
           layoutStore.setSelectedAssetId(selectedNode.id);
           set({ selectedId: selectedNode.id }); // Also update layer store selection
         } else {
-          console.log('[debug] Selecting container:', { 
-            containerId: id,
-            containerName: selectedNode.name,
-            level: selectedNode.level
-          });
           // If it's a container, just set the container ID and clear asset ID
           layoutStore.setSelectedId(id);
           layoutStore.setSelectedAssetId(null);
@@ -272,40 +223,11 @@ export const useLayerStore = create<LayerState>((set, get) => ({
     const state = get();
     
     if (!layoutStore.containers) {
-      console.error('[debug] Invalid layout state:', layoutStore);
       return;
     }
     
-    console.log('[debug] Starting sync with layout store:', {
-      layoutSelectedId: layoutStore.selectedId,
-      layoutSelectedAssetId: layoutStore.selectedAssetId,
-      currentSelectedId: state.selectedId,
-      containers: layoutStore.containers.map(c => ({
-        id: c.id,
-        name: c.name,
-        isLocked: c.isLocked,
-        assetCount: Object.keys(c.assets).length,
-        assets: Object.entries(c.assets).map(([id, asset]) => ({
-          id,
-          name: asset.name,
-          isLocked: asset.isLocked
-        }))
-      }))
-    });
-    
     // Ensure lock states are properly synced
     const containersWithLockStates = layoutStore.containers.map(container => {
-      console.log('[debug] Processing container lock states:', {
-        containerId: container.id,
-        containerName: container.name,
-        containerLocked: container.isLocked,
-        assetLockStates: Object.entries(container.assets).map(([id, asset]) => ({
-          id,
-          name: asset.name,
-          isLocked: asset.isLocked
-        }))
-      });
-
       return {
         ...container,
         isLocked: container.isLocked ?? false,
@@ -324,29 +246,6 @@ export const useLayerStore = create<LayerState>((set, get) => ({
       containers: containersWithLockStates,
       // If there's a selected asset, use that as the selected ID, otherwise use the container ID
       selectedId: layoutStore.selectedAssetId || layoutStore.selectedId
-    });
-    
-    // Force hierarchy rebuild and log the result
-    const hierarchy = get().getLayerHierarchy();
-    console.log('[debug] Sync complete - Current hierarchy:', {
-      totalNodes: hierarchy.length,
-      selectedId: get().selectedId,
-      hierarchySnapshot: hierarchy.map(node => ({
-        id: node.id,
-        name: node.name,
-        type: 'container',
-        level: node.level,
-        isLocked: node.isLocked,
-        childCount: node.children.length,
-        children: node.children.map(child => ({
-          id: child.id,
-          name: child.name,
-          type: child.type,
-          level: child.level,
-          isLocked: child.isLocked,
-          parentId: child.parentId
-        }))
-      }))
     });
   },
 
@@ -420,18 +319,31 @@ export const useLayerStore = create<LayerState>((set, get) => ({
     const state = get();
     const { draggingId, dropTargetId, dropPosition } = state.dragState;
 
+    console.log('[debug] Starting drag end operation:', {
+      draggingId,
+      dropTargetId,
+      dropPosition
+    });
+
     if (!draggingId) {
+      console.log('[debug] No dragging ID found, aborting drag end');
       return;
     }
 
     const layoutStore = useLayoutStore.getState();
-    
-    // Check if we're dragging an asset or a container
     const isAsset = !layoutStore.containers.some(c => c.id === draggingId);
+    
+    console.log('[debug] Identified item type:', {
+      isAsset,
+      draggingId,
+      foundInContainers: layoutStore.containers.map(c => ({
+        containerId: c.id,
+        hasAsset: !!c.assets[draggingId]
+      }))
+    });
     
     if (isAsset) {
       // Handle asset movement
-      // First, find which container contains this asset
       let sourceContainerId: string | null = null;
       let assetData: Asset | null = null;
       
@@ -443,316 +355,230 @@ export const useLayerStore = create<LayerState>((set, get) => ({
         }
       }
       
-      if (!sourceContainerId || !assetData) {
-        console.error('Asset not found:', draggingId);
-        return;
-      }
-      
-      console.log('=== Asset Movement Debug ===', {
-        assetId: draggingId,
+      console.log('[debug] Asset movement details:', {
         sourceContainerId,
-        dropTargetId,
+        assetFound: !!assetData,
+        targetContainerId: dropTargetId,
         dropPosition
       });
       
-      // If dropping inside a container, move the asset to that container
-      if (dropTargetId && dropPosition === 'inside') {
-        const targetContainer = layoutStore.containers.find(c => c.id === dropTargetId);
-        if (!targetContainer) {
-          console.error('Target container not found:', dropTargetId);
-          return;
-        }
-        
-        // Don't move if source and target are the same
-        if (sourceContainerId === dropTargetId) {
-          console.log('Source and target containers are the same, no movement needed');
-          return;
-        }
-        
-        console.log('Moving asset between containers:', {
-          assetId: draggingId,
-          fromContainer: sourceContainerId,
-          toContainer: dropTargetId
+      if (!sourceContainerId || !assetData) {
+        console.log('[debug] Asset or source container not found');
+        return;
+      }
+
+      // Find target container based on drop target ID
+      let targetContainer = null;
+      if (dropTargetId && (dropPosition === 'before' || dropPosition === 'after')) {
+        // For reordering, find container that has the target asset
+        targetContainer = layoutStore.containers.find(c => {
+          return Object.keys(c.assets).includes(dropTargetId);
         });
-        
-        try {
-          // Create updated containers
-          const updatedContainers = layoutStore.containers.map(container => {
-            if (container.id === sourceContainerId) {
-              // Remove asset from source container
-              const { [draggingId]: _, ...remainingAssets } = container.assets;
-              return {
-                ...container,
-                assets: remainingAssets
-              };
-            } else if (container.id === dropTargetId) {
-              // Add asset to target container
-              return {
-                ...container,
-                assets: {
-                  ...container.assets,
-                  [draggingId]: assetData
+      } else if (dropTargetId && dropPosition === 'inside') {
+        // For moving into container, find container by ID
+        targetContainer = layoutStore.containers.find(c => c.id === dropTargetId);
+      }
+
+      if (!targetContainer) {
+        console.log('[debug] Target container not found');
+        return;
+      }
+
+      // Handle reordering within same container
+      if (dropTargetId && (dropPosition === 'before' || dropPosition === 'after')) {
+        console.log('[debug] Reordering asset within container:', {
+          sourceContainerId,
+          targetAssetId: dropTargetId,
+          position: dropPosition
+        });
+
+        const targetAsset = targetContainer.assets[dropTargetId];
+        if (!targetAsset) {
+          console.log('[debug] Target asset not found');
+          return;
+        }
+
+        // Calculate new position based on target asset's position
+        const newPosition = dropPosition === 'before' 
+          ? targetAsset.depth + 10  // Place slightly above target
+          : targetAsset.depth - 10; // Place slightly below target
+
+        console.log('[debug] Calculated new asset position:', {
+          targetPosition: targetAsset.depth,
+          newPosition,
+          dropPosition
+        });
+
+        // Update the asset's position
+        const updatedContainers = layoutStore.containers.map(container => {
+          if (container.id === sourceContainerId) {
+            return {
+              ...container,
+              assets: {
+                ...container.assets,
+                [draggingId]: {
+                  ...assetData,
+                  depth: newPosition
                 }
-              };
-            }
-            return container;
-          });
-          
-          // Save changes
-          layoutStore.saveToHistory(updatedContainers);
-          
-          // Update selection to the moved asset in its new container
-          layoutStore.setSelectedId(dropTargetId);
-          layoutStore.setSelectedAssetId(draggingId);
-          
-          // Force immediate sync
-          get().syncWithLayoutStore();
-        } catch (error) {
-          console.error('Error moving asset between containers:', error);
-        }
-      } else if (!dropTargetId && dropPosition === 'after') {
-        // If dropping at root level, we can't move assets to root
-        // Assets must be inside a container
-        console.error('Cannot move assets to root level - assets must be inside a container');
-        
-        // Show a toast notification to the user
-        toast({
-          title: "Cannot move asset to root level",
-          description: "Assets must be placed inside a container",
-          variant: "destructive",
+              }
+            };
+          }
+          return container;
         });
+
+        console.log('[debug] Updating asset position:', {
+          assetId: draggingId,
+          oldPosition: assetData.depth,
+          newPosition
+        });
+
+        layoutStore.saveToHistory(updatedContainers);
+        layoutStore.setSelectedId(sourceContainerId);
+        layoutStore.setSelectedAssetId(draggingId);
+      } else if (dropTargetId && dropPosition === 'inside') {
+        console.log('[debug] Found target container:', {
+          targetFound: !!targetContainer,
+          targetId: dropTargetId,
+          isSameContainer: sourceContainerId === dropTargetId
+        });
+
+        if (!targetContainer || sourceContainerId === dropTargetId) {
+          console.log('[debug] Invalid target container or same container');
+          return;
+        }
+        
+        // Get siblings in target container for depth calculation
+        const siblings = Object.values(targetContainer.assets);
+        const newPosition = layoutStore.getNextAvailableDepth(dropTargetId);
+        
+        console.log('[debug] Calculating new asset position:', {
+          targetContainerId: dropTargetId,
+          currentSiblings: siblings.length,
+          newPosition
+        });
+        
+        // Update asset with new container and depth
+        const updatedContainers = layoutStore.containers.map(container => {
+          if (container.id === sourceContainerId) {
+            const { [draggingId]: _, ...remainingAssets } = container.assets;
+            return { ...container, assets: remainingAssets };
+          } else if (container.id === dropTargetId) {
+            return {
+              ...container,
+              assets: {
+                ...container.assets,
+                [draggingId]: {
+                  ...assetData,
+                  depth: newPosition
+                }
+              }
+            };
+          }
+          return container;
+        });
+        
+        console.log('[debug] Updating containers for asset move:', {
+          sourceContainerId,
+          targetContainerId: dropTargetId,
+          assetId: draggingId,
+          newPosition
+        });
+        
+        layoutStore.saveToHistory(updatedContainers);
+        layoutStore.setSelectedId(dropTargetId);
+        layoutStore.setSelectedAssetId(draggingId);
       }
     } else {
       // Handle container movement
       const container = layoutStore.containers.find(c => c.id === draggingId);
-      
-      if (!container) {
-        console.error('Container not found:', draggingId);
-        return;
-      }
-
-      console.log('=== Container Movement Debug ===', {
-        draggingId,
-        dropTargetId,
-        dropPosition,
-        container,
-        containerParentId: container.parentId,
-        allContainers: layoutStore.containers.map(c => ({ id: c.id, parentId: c.parentId }))
+      console.log('[debug] Container movement details:', {
+        containerFound: !!container,
+        containerId: draggingId,
+        targetId: dropTargetId,
+        position: dropPosition
       });
 
-      if (!dropTargetId && dropPosition === 'after') {
-        // Moving to root level
-        console.log('Moving to root level - Initial state:', {
-          container,
-          oldParentId: container.parentId,
-          allContainers: layoutStore.containers.map(c => ({ id: c.id, parentId: c.parentId }))
+      if (!container) {
+        console.log('[debug] Container not found');
+        return;
+      }
+      
+      if (dropTargetId && dropPosition === 'inside') {
+        console.log('[debug] Moving container inside target:', {
+          containerId: draggingId,
+          targetId: dropTargetId
         });
         
-        const oldParent = layoutStore.containers.find(c => c.id === container.parentId);
+        // Update container parent and recalculate depth
+        const updatedContainers = layoutStore.containers.map(c =>
+          c.id === draggingId ? { 
+            ...c, 
+            parentId: dropTargetId,
+            level: c.level + 1,
+            depth: layoutStore.getNextAvailableDepth(dropTargetId)
+          } : c
+        );
         
-        // Create updated container with all changes
-        const updatedContainer = {
-          ...container,
-          parentId: null, // Explicitly set to null instead of undefined
-          portrait: oldParent ? {
-            ...container.portrait,
-            x: container.portrait.x + oldParent.portrait.x,
-            y: container.portrait.y + oldParent.portrait.y
-          } : container.portrait,
-          landscape: oldParent ? {
-            ...container.landscape,
-            x: container.landscape.x + oldParent.landscape.x,
-            y: container.landscape.y + oldParent.landscape.y
-          } : container.landscape
-        };
-        
-        // Remove from old position and add to end
-        const updatedContainers = layoutStore.containers
-          .filter(c => c.id !== container.id)
-          .concat(updatedContainer);
-        
-        console.log('Moving to root level - Updated state:', {
-          before: container,
-          after: updatedContainer,
-          updatedContainers: updatedContainers.map(c => ({ id: c.id, parentId: c.parentId }))
+        console.log('[debug] Updated container hierarchy:', {
+          containerId: draggingId,
+          newParentId: dropTargetId,
+          newLevel: container.level + 1
         });
         
-        // Verify the update
-        const hasParentRelation = updatedContainers.some(c => c.parentId === container.id);
-        if (hasParentRelation) {
-          console.error('Invalid state: Container still has parent relations');
-          return;
-        }
-        
-        // Save all changes in a single operation
         layoutStore.saveToHistory(updatedContainers);
-        
-        // Force immediate sync and verify
-        get().syncWithLayoutStore();
-        
-        // Verify the hierarchy after sync
-        const hierarchy = get().getLayerHierarchy();
-        console.log('Verification after move to root:', {
-          isRoot: hierarchy.some(node => node.id === draggingId),
-          hierarchy: hierarchy.map(node => ({ id: node.id, parentId: node.parentId }))
-        });
-      } else if (dropTargetId) {
-        // Moving to another container
+      } else if (dropTargetId && dropPosition !== 'inside') {
         const targetContainer = layoutStore.containers.find(c => c.id === dropTargetId);
         if (!targetContainer) {
-          console.error('Target container not found:', dropTargetId);
+          console.log('[debug] Target container not found');
           return;
         }
         
-        console.log('Moving to container - Initial state:', {
-          sourceContainer: container,
-          targetContainer,
-          dropPosition,
-          allContainers: layoutStore.containers.map(c => ({ id: c.id, parentId: c.parentId }))
+        console.log('[debug] Moving container relative to target:', {
+          containerId: draggingId,
+          targetId: dropTargetId,
+          position: dropPosition,
+          targetParentId: targetContainer.parentId
         });
-
-        if (dropPosition === 'inside') {
-          // Update position to be relative to new parent
-          const newPortrait = {
-            ...container.portrait,
-            x: container.portrait.x - targetContainer.portrait.x,
-            y: container.portrait.y - targetContainer.portrait.y
-          };
-          const newLandscape = {
-            ...container.landscape,
-            x: container.landscape.x - targetContainer.landscape.x,
-            y: container.landscape.y - targetContainer.landscape.y
-          };
-          
-          // Create updated container with all changes
-          const updatedContainer = {
-            ...container,
-            parentId: targetContainer.id,
-            portrait: newPortrait,
-            landscape: newLandscape
-          };
-          
-          // Update containers array with the modified container
-          const updatedContainers = layoutStore.containers
-            .filter(c => c.id !== container.id)
-            .concat(updatedContainer);
-          
-          console.log('Moving inside container - Updated state:', {
-            before: container,
-            after: updatedContainer,
-            updatedContainers: updatedContainers.map(c => ({ id: c.id, parentId: c.parentId }))
-          });
-          
-          // Verify the update
-          const hasCorrectParent = updatedContainers.find(c => c.id === container.id)?.parentId === targetContainer.id;
-          if (!hasCorrectParent) {
-            console.error('Invalid state: Container parent not updated correctly');
-            return;
-          }
-          
-          // Save all changes in a single operation
-          layoutStore.saveToHistory(updatedContainers);
-          
-          // Force immediate sync to ensure hierarchy is updated
-          get().syncWithLayoutStore();
-        } else {
-          // Moving before/after another container
-          const newParentId = targetContainer.parentId;
-          
-          // Calculate position adjustments based on parent changes
-          const oldParent = container.parentId ? layoutStore.containers.find(c => c.id === container.parentId) : null;
-          const newParent = newParentId ? layoutStore.containers.find(c => c.id === newParentId) : null;
-          
-          // Calculate absolute positions (relative to canvas)
-          const absolutePortrait = {
-            ...container.portrait,
-            x: container.portrait.x + (oldParent ? oldParent.portrait.x : 0),
-            y: container.portrait.y + (oldParent ? oldParent.portrait.y : 0)
-          };
-          
-          const absoluteLandscape = {
-            ...container.landscape,
-            x: container.landscape.x + (oldParent ? oldParent.landscape.x : 0),
-            y: container.landscape.y + (oldParent ? oldParent.landscape.y : 0)
-          };
-          
-          // Calculate new relative positions based on new parent
-          const newPortrait = {
-            ...container.portrait,
-            x: absolutePortrait.x - (newParent ? newParent.portrait.x : 0),
-            y: absolutePortrait.y - (newParent ? newParent.portrait.y : 0)
-          };
-          
-          const newLandscape = {
-            ...container.landscape,
-            x: absoluteLandscape.x - (newParent ? newParent.landscape.x : 0),
-            y: absoluteLandscape.y - (newParent ? newParent.landscape.y : 0)
-          };
-          
-          // Create updated container with all changes
-          const updatedContainer = {
-            ...container,
-            parentId: newParentId,
-            portrait: newPortrait,
-            landscape: newLandscape
-          };
-          
-          console.log('Moving before/after container - Position calculation:', {
-            oldParent: oldParent ? { id: oldParent.id, position: oldParent.portrait } : null,
-            newParent: newParent ? { id: newParent.id, position: newParent.portrait } : null,
-            absolutePortrait,
-            newPortrait
-          });
-          
-          // Update containers array with the modified container
-          const containers = layoutStore.containers
-            .filter(c => c.id !== container.id);
-          
-          // Find the correct position to insert the container
-          const targetIndex = containers.findIndex(c => c.id === targetContainer.id);
-          const insertIndex = dropPosition === 'after' ? targetIndex + 1 : targetIndex;
-          
-          // Insert the container at the correct position
-          containers.splice(insertIndex, 0, updatedContainer);
-          
-          console.log('Moving before/after container - Updated state:', {
-            before: container,
-            after: updatedContainer,
-            updatedContainers: containers.map(c => ({ id: c.id, parentId: c.parentId }))
-          });
-          
-          // Verify the update
-          const insertedContainer = containers.find(c => c.id === container.id);
-          if (!insertedContainer) {
-            console.error('Invalid state: Container not inserted correctly');
-            return;
-          }
-          
-          if (insertedContainer.parentId !== newParentId) {
-            console.error('Invalid state: Container parent not updated correctly', {
-              expected: newParentId,
-              actual: insertedContainer.parentId
-            });
-            return;
-          }
-          
-          // Save all changes in a single operation
-          layoutStore.saveToHistory(containers);
-          
-          // Force immediate sync to ensure hierarchy is updated
-          get().syncWithLayoutStore();
-        }
+        
+        // Get siblings at target level
+        const siblings = layoutStore.containers.filter(c => 
+          c.parentId === targetContainer.parentId && c.id !== draggingId
+        );
+        
+        // Calculate new depth based on drop position
+        const newPosition = layoutStore.getNextAvailableDepth(targetContainer.parentId);
+        
+        console.log('[debug] Calculating new container position:', {
+          currentSiblings: siblings.length,
+          newPosition,
+          targetParentId: targetContainer.parentId
+        });
+        
+        // Update container depth and parent
+        const updatedContainers = layoutStore.containers.map(c =>
+          c.id === draggingId ? { 
+            ...c, 
+            parentId: targetContainer.parentId,
+            level: targetContainer.level,
+            depth: newPosition 
+          } : c
+        );
+        
+        console.log('[debug] Updated container position:', {
+          containerId: draggingId,
+          newParentId: targetContainer.parentId,
+          newLevel: targetContainer.level,
+          newPosition
+        });
+        
+        layoutStore.saveToHistory(updatedContainers);
       }
     }
-
-    // Reset drag state
-    set({
-      dragState: {
-        draggingId: null,
-        dropTargetId: null,
-        dropPosition: null
-      }
-    });
+    
+    // Clear drag state
+    set({ dragState: { draggingId: null, dropTargetId: null, dropPosition: null } });
+    console.log('[debug] Syncing layer store after movement');
+    get().syncWithLayoutStore();
   }
 }));
 
