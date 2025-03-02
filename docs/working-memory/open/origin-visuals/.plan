@@ -1,0 +1,156 @@
+# Feature: Origin Visuals Enhancement
+
+## Overview
+- **Purpose**: Improve origin visualization and behavior in the canvas and properties panel
+- **Type**: Enhancement
+- **Priority**: High
+
+## Requirements
+1. Origin values in properties panel should directly control the red dot position
+2. Origin (0,0) should place dot at top-left of asset
+3. Origin (0.5,0.5) should place dot at center of asset
+4. Origin (1,0) should place dot at top-right of asset
+5. Asset position should not change when origin values change
+6. Origin dot should update position when asset is resized
+7. Origin dot should only be visible when asset is selected
+8. Origin dot should not be draggable in canvas
+9. Enhanced visual indicators for origin point
+
+## Implementation Plan
+
+### Phase 1: Fix Origin Calculation
+- [x] Update calculateOriginPoint function to correctly use origin values
+- [x] Remove origin dragging functionality from canvas
+- [x] Ensure origin point stays relative to asset bounds
+
+### Phase 2: Visual Enhancements
+- [x] Add crosshair lines to origin point indicator
+- [x] Add small coordinate display near origin point
+- [x] Ensure origin indicator scales appropriately with zoom
+
+### Phase 3: Properties Panel Updates
+- [x] Update origin value handling in properties panel
+- [x] Add min/max constraints (0-1) for origin inputs
+- [x] Add preset buttons for common origin positions
+- [x] Add same controls for both portrait and landscape modes
+
+## Technical Considerations
+
+### Origin Point Calculation Pseudo-code (First Draft):
+```typescript
+const calculateOriginPoint = (asset: Asset, transform: AssetTransform): Point => {
+  // Get asset dimensions
+  const width = asset.width;
+  const height = asset.height;
+  
+  // Calculate absolute position based on origin values
+  const x = asset.position.x + (transform.origin.x * width);
+  const y = asset.position.y + (transform.origin.y * height);
+  
+  return { x, y };
+}
+```
+
+Critique: This doesn't account for asset rotation or parent container transforms.
+
+### Revised Origin Point Calculation:
+```typescript
+const calculateOriginPoint = (
+  asset: Asset, 
+  transform: AssetTransform,
+  containerTransform: Transform
+): Point => {
+  // Get asset bounds
+  const bounds = getAssetBounds(asset, containerTransform);
+  
+  // Calculate origin point relative to bounds
+  const x = bounds.x + (transform.origin.x * bounds.width);
+  const y = bounds.y + (transform.origin.y * bounds.height);
+  
+  return { x, y };
+}
+```
+
+### Visual Indicator Component Pseudo-code (First Draft):
+```typescript
+const OriginIndicator = ({ x, y, selected }) => {
+  if (!selected) return null;
+  
+  return (
+    <Group>
+      <Circle x={x} y={y} radius={4} fill="red" />
+      <Line points={[x-10, y, x+10, y]} stroke="red" />
+      <Line points={[x, y-10, x, y+10]} stroke="red" />
+    </Group>
+  );
+}
+```
+
+Critique: Doesn't scale with zoom level and lacks coordinate display.
+
+### Revised Visual Indicator:
+```typescript
+const OriginIndicator = ({ 
+  x, 
+  y, 
+  selected, 
+  scale,
+  originValues 
+}) => {
+  if (!selected) return null;
+  
+  const size = 4 / scale;
+  const lineLength = 10 / scale;
+  
+  return (
+    <Group>
+      <Circle x={x} y={y} radius={size} fill="red" />
+      <Line 
+        points={[x-lineLength, y, x+lineLength, y]} 
+        stroke="red" 
+        strokeWidth={1/scale} 
+      />
+      <Line 
+        points={[x, y-lineLength, x, y+lineLength]} 
+        stroke="red" 
+        strokeWidth={1/scale} 
+      />
+      <Text 
+        x={x + 5/scale} 
+        y={y + 5/scale} 
+        text={`(${originValues.x}, ${originValues.y})`}
+        fontSize={12/scale}
+        fill="red"
+      />
+    </Group>
+  );
+}
+```
+
+## Progress History
+
+### 2025-03-02 23:04:07 - Initial Setup
+- [x] Created feature plan
+- [x] Defined requirements
+- [x] Created implementation phases
+- [x] Added pseudo-code with critiques and revisions
+
+### 2025-03-02 23:15:00 - Phase 1 & 2 Implementation
+- [x] Updated calculateOriginPoint function to correctly handle origin values
+- [x] Removed origin dragging functionality
+- [x] Added enhanced origin visualization with crosshair and coordinates
+- [x] Updated asset rendering to use origin values correctly
+
+### 2025-03-02 23:30:00 - Phase 3 Implementation
+- [x] Added min/max constraints (0-1) for origin inputs
+- [x] Added preset buttons for common origin positions
+- [x] Added same controls for both portrait and landscape modes
+- [x] Improved origin input labels and organization
+
+## Next Steps
+1. Test the implementation:
+   - Test different origin values
+   - Test with different asset sizes
+   - Test with different scale modes
+   - Test with rotation
+   - Test with parent container transforms 

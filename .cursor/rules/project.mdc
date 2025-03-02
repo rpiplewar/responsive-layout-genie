@@ -17,7 +17,127 @@ src/
 │   └── layoutStore.ts        # Layout and asset state
 └── config/
     └── devices.ts            # Device configurations
+
 ```
+## Working Memory Structure (To Be Implemented)
+
+## Prompt-Based Modification Guidelines
+
+When using prompts to modify the game, follow these structured guidelines:
+
+### 1. Working Memory Management
+1. **ALWAYS** check for working memory folder at the beginning of each session:
+   ```
+   docs/working-memory/open/{feature}/.plan
+   ```
+   
+   If it doesn't exist yet, create it:
+   ```bash
+   mkdir -p docs/working-memory/open/{feature}
+   cp templates/task-plan-template.md docs/working-memory/open/{feature}/.plan
+   ```
+
+2. **MANDATORY**: Get current date and time at the start of each work session using:
+   ```
+   date +"%Y-%m-%d %H:%M:%S"
+   ```
+
+3. **READ** the .plan file completely BEFORE starting work to understand:
+   - Current state of the feature
+   - Previously completed work
+   - Pending tasks
+
+4. **PRESERVE** previous progress history with this format in .plan:
+   ```
+   ## Progress History
+   
+   ### YYYY-MM-DD HH:MM:SS - Task Description
+   - [x] Completed sub-task
+   - [x] Completed sub-task
+   
+   ### YYYY-MM-DD HH:MM:SS - Previous Task
+   - [x] Previous completed work
+   ```
+
+5. **UPDATE** the .plan file before ending each session:
+   - Add a new timestamped entry to the Progress History
+   - Never delete previous entries
+   - Mark completed tasks with [x]
+   - Update any pending tasks
+
+## Task Plan Template
+
+The project has an existing task plan template at `templates/task-plan-template.md`. Use this template when creating new feature plans. The expected structure is:
+
+```markdown
+# Feature: {feature-name}
+
+## Overview
+- **Purpose**: Brief description of the feature purpose
+- **Type**: [New Feature|Enhancement|Fix]
+- **Priority**: [High|Medium|Low]
+
+## Requirements
+- Requirement 1
+- Requirement 2
+- Requirement 3
+
+## Implementation Plan
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
+
+## Assets Required
+- Asset 1: Description and location
+- Asset 2: Description and location
+
+## Technical Considerations
+- Consideration 1
+- Consideration 2
+
+## Progress History
+
+### YYYY-MM-DD HH:MM:SS - Initial Setup
+- [x] Created feature plan
+- [ ] Next tasks identified
+
+```
+
+## Memory Retention Rules
+
+1. **Working Memory Structure**:
+   ```
+   docs/working-memory/                # (To be created)
+   ├── open/                           # Active features
+   │   └── {feature}/                  # Feature-specific folders
+   │       ├── .plan                   # Feature plan and progress
+   │       ├── .assets                 # Asset tracking
+   │       └── .notes                  # Additional notes
+   └── done/                           # Completed features
+   ```
+
+2. **Feature Lifecycle**:
+   - Create feature in `open/` when work begins
+   - Update `.plan` with progress during development
+   - Move to `done/` when completed
+   - Never delete previous progress history
+
+3. **Cross-Referencing**:
+   - Reference related features: `[feature-name]`
+   - Reference files: `file:src/path/to/file.js`
+   - Reference effects: `effect:EffectName`
+
+4. **Initialization Commands**:
+   ```bash
+   # Create new feature directory
+   mkdir -p docs/working-memory/open/{feature-name}
+
+   # Create feature plan (using existing template)
+   cp templates/task-plan-template.md docs/working-memory/open/{feature-name}/.plan
+
+   # Mark feature as complete
+   mv docs/working-memory/open/{feature-name} docs/working-memory/done/
+   ``` 
 
 ## Core Components Documentation
 
@@ -517,6 +637,7 @@ Before implementing features, always ask:
    - How should layouts adapt to different devices?
    - What are the grid snapping rules?
    - How should orientation changes be handled?
+
 
 ## Performance Guidelines
 
