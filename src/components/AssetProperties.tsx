@@ -232,180 +232,44 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
           </div>
         </div>
 
-        <div className="space-y-4">
-          <Label className="text-gray-400">Origin</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-gray-400">X</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                value={asset.portrait.origin.x}
-                onChange={(e) =>
-                  handleAssetChange(
-                    'origin',
-                    {
-                      ...asset.portrait.origin,
-                      x: parseFloat(e.target.value),
-                    },
-                    'portrait'
-                  )
-                }
-                className="bg-editor-grid text-white border-editor-grid"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-400">Y</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                value={asset.portrait.origin.y}
-                onChange={(e) =>
-                  handleAssetChange(
-                    'origin',
-                    {
-                      ...asset.portrait.origin,
-                      y: parseFloat(e.target.value),
-                    },
-                    'portrait'
-                  )
-                }
-                className="bg-editor-grid text-white border-editor-grid"
-              />
-            </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <Label className="text-gray-400">Origin X</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={asset.portrait.origin.x}
+              onChange={(e) =>
+                handleAssetChange(
+                  'origin',
+                  {
+                    ...asset.portrait.origin,
+                    x: parseFloat(e.target.value),
+                  },
+                  'portrait'
+                )
+              }
+              className="bg-editor-grid text-white border-editor-grid"
+            />
           </div>
-          {/* Origin presets */}
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
+          <div className="space-y-2">
+            <Label className="text-gray-400">Origin Y</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={asset.portrait.origin.y}
+              onChange={(e) =>
                 handleAssetChange(
                   'origin',
-                  { x: 0, y: 0 },
+                  {
+                    ...asset.portrait.origin,
+                    y: parseFloat(e.target.value),
+                  },
                   'portrait'
                 )
               }
-            >
-              Top Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 0 },
-                  'portrait'
-                )
-              }
-            >
-              Top Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 0 },
-                  'portrait'
-                )
-              }
-            >
-              Top Right
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0, y: 0.5 },
-                  'portrait'
-                )
-              }
-            >
-              Middle Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 0.5 },
-                  'portrait'
-                )
-              }
-            >
-              Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 0.5 },
-                  'portrait'
-                )
-              }
-            >
-              Middle Right
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0, y: 1 },
-                  'portrait'
-                )
-              }
-            >
-              Bottom Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 1 },
-                  'portrait'
-                )
-              }
-            >
-              Bottom Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 1 },
-                  'portrait'
-                )
-              }
-            >
-              Bottom Right
-            </Button>
+              className="bg-editor-grid text-white border-editor-grid"
+            />
           </div>
         </div>
 
@@ -581,180 +445,44 @@ export const AssetProperties: React.FC<AssetPropertiesProps> = ({
           </div>
         </div>
 
-        <div className="space-y-4">
-          <Label className="text-gray-400">Origin</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">
-              <Label className="text-gray-400">X</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                value={asset.landscape.origin.x}
-                onChange={(e) =>
-                  handleAssetChange(
-                    'origin',
-                    {
-                      ...asset.landscape.origin,
-                      x: parseFloat(e.target.value),
-                    },
-                    'landscape'
-                  )
-                }
-                className="bg-editor-grid text-white border-editor-grid"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-400">Y</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                value={asset.landscape.origin.y}
-                onChange={(e) =>
-                  handleAssetChange(
-                    'origin',
-                    {
-                      ...asset.landscape.origin,
-                      y: parseFloat(e.target.value),
-                    },
-                    'landscape'
-                  )
-                }
-                className="bg-editor-grid text-white border-editor-grid"
-              />
-            </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <Label className="text-gray-400">Origin X</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={asset.landscape.origin.x}
+              onChange={(e) =>
+                handleAssetChange(
+                  'origin',
+                  {
+                    ...asset.landscape.origin,
+                    x: parseFloat(e.target.value),
+                  },
+                  'landscape'
+                )
+              }
+              className="bg-editor-grid text-white border-editor-grid"
+            />
           </div>
-          {/* Origin presets */}
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
+          <div className="space-y-2">
+            <Label className="text-gray-400">Origin Y</Label>
+            <Input
+              type="number"
+              step="0.1"
+              value={asset.landscape.origin.y}
+              onChange={(e) =>
                 handleAssetChange(
                   'origin',
-                  { x: 0, y: 0 },
+                  {
+                    ...asset.landscape.origin,
+                    y: parseFloat(e.target.value),
+                  },
                   'landscape'
                 )
               }
-            >
-              Top Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 0 },
-                  'landscape'
-                )
-              }
-            >
-              Top Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 0 },
-                  'landscape'
-                )
-              }
-            >
-              Top Right
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0, y: 0.5 },
-                  'landscape'
-                )
-              }
-            >
-              Middle Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 0.5 },
-                  'landscape'
-                )
-              }
-            >
-              Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 0.5 },
-                  'landscape'
-                )
-              }
-            >
-              Middle Right
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0, y: 1 },
-                  'landscape'
-                )
-              }
-            >
-              Bottom Left
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 0.5, y: 1 },
-                  'landscape'
-                )
-              }
-            >
-              Bottom Center
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-editor-grid border-editor-grid hover:bg-editor-accent/20"
-              onClick={() =>
-                handleAssetChange(
-                  'origin',
-                  { x: 1, y: 1 },
-                  'landscape'
-                )
-              }
-            >
-              Bottom Right
-            </Button>
+              className="bg-editor-grid text-white border-editor-grid"
+            />
           </div>
         </div>
 

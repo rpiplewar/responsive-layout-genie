@@ -1,4 +1,4 @@
-import { Stage, Layer, Rect, Group, Transformer, Image, Circle, Line, Text } from 'react-konva';
+import { Stage, Layer, Rect, Group, Transformer, Image, Circle, Line } from 'react-konva';
 import { useLayoutStore, Container, Asset, AssetTransform } from '../store/layoutStore';
 import { useAlignmentStore, AlignmentControls } from '../store/alignmentStore';
 import { Position, Size } from '../store/types';
@@ -498,38 +498,29 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     if (!container) return null;
     
     const containerPos = container[orientation];
-    const asset = container.assets[assetId];
-    if (!asset) return null;
-
-    // Calculate base position (center of the asset)
-    let baseX: number;
-    let baseY: number;
     
     if (transform.position.reference === 'container') {
-      baseX = containerPos.x + (transform.position.x - 0.5) * containerPos.width;
-      baseY = containerPos.y + (transform.position.y - 0.5) * containerPos.height;
-    } else {
-      const refAsset = container.assets[transform.position.reference];
-      if (!refAsset || !refAsset.key || !imageElementsRef.current[refAsset.key]) return null;
-
-      const refTransform = refAsset[orientation];
-      const refOrigin = calculateOriginPoint(containerId, refAsset.id, refTransform);
-      if (!refOrigin) return null;
-
-      const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
-      baseX = refOrigin.x + (transform.position.x - 0.5) * refDimensions.width;
-      baseY = refOrigin.y + (transform.position.y - 0.5) * refDimensions.height;
+      // For container reference, position is relative to container center
+      return {
+        x: containerPos.x + transform.position.x * containerPos.width,
+        y: containerPos.y + transform.position.y * containerPos.height
+      };
     }
 
-    // Get current asset dimensions
-    const { width, height } = assetDimensionsRef.current[assetId] || { width: 0, height: 0 };
-    
-    // Calculate origin point relative to asset center
-    // transform.origin values: (0,0) = top-left, (0.5,0.5) = center, (1,1) = bottom-right
-    const originX = baseX + (transform.origin.x - 0.5) * width;
-    const originY = baseY + (transform.origin.y - 0.5) * height;
+    const refAsset = container.assets[transform.position.reference];
+    if (!refAsset || !refAsset.key || !imageElementsRef.current[refAsset.key]) return null;
 
-    return { x: originX, y: originY };
+    const refTransform = refAsset[orientation];
+    const refOrigin = calculateOriginPoint(containerId, refAsset.id, refTransform);
+    if (!refOrigin) return null;
+
+    // Get the reference asset's dimensions from our cache
+    const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
+
+    return {
+      x: refOrigin.x + transform.position.x * refDimensions.width,
+      y: refOrigin.y + transform.position.y * refDimensions.height
+    };
   };
 
   // Sort containers by depth before rendering
@@ -683,8 +674,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
 
       // Calculate position relative to reference asset's center
-      const newX = (node.x() - refOrigin.x) / refDimensions.width + 0.5;
-      const newY = (node.y() - refOrigin.y) / refDimensions.height + 0.5;
+      const newX = (node.x() - refOrigin.x) / refDimensions.width;
+      const newY = (node.y() - refOrigin.y) / refDimensions.height;
 
       return { x: newX, y: newY };
     };
@@ -713,8 +704,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           y={originY}
           width={width}
           height={height}
-          offsetX={width * transform.origin.x}
-          offsetY={height * transform.origin.y}
+          offsetX={width / 2}
+          offsetY={height / 2}
           rotation={transform.rotation}
           draggable={!isLocked}
           transformable={!isLocked}
@@ -755,9 +746,9 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             const node = e.target;
             
             if (transform.position.reference === 'container') {
-              // Container reference logic remains unchanged
-              const newX = (node.x() - containerPos.x) / containerPos.width + 0.5;
-              const newY = (node.y() - containerPos.y) / containerPos.height + 0.5;
+              // Match the coordinate system used in calculateOriginPoint
+              const newX = (node.x() - containerPos.x) / containerPos.width;
+              const newY = (node.y() - containerPos.y) / containerPos.height;
               
               const updates = {
                 ...transform,
@@ -798,7 +789,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             const updateDependentAssets = (assetId: string) => {
               Object.entries(container.assets).forEach(([id, dependentAsset]) => {
                 if (dependentAsset[orientation].position.reference === assetId) {
-                  updateAsset(containerId, id, dependentAsset[orientation], orientation);
+                  updateAsset(selectedId, id, dependentAsset[orientation], orientation);
                   updateDependentAssets(id);
                 }
               });
@@ -880,38 +871,51 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           }}
         />
         {isSelected && !isLocked && (
-          <Group>
-            {/* Origin indicator */}
-            <Circle
-              x={originX}
-              y={originY}
-              radius={4}
-              fill="red"
-              listening={false} // Disable interaction
-            />
-            {/* Crosshair lines */}
-            <Line
-              points={[originX - 10, originY, originX + 10, originY]}
-              stroke="red"
-              strokeWidth={1}
-              listening={false}
-            />
-            <Line
-              points={[originX, originY - 10, originX, originY + 10]}
-              stroke="red"
-              strokeWidth={1}
-              listening={false}
-            />
-            {/* Coordinate display */}
-            <Text
-              x={originX + 8}
-              y={originY + 8}
-              text={`(${transform.origin.x.toFixed(2)}, ${transform.origin.y.toFixed(2)})`}
-              fontSize={12}
-              fill="red"
-              listening={false}
-            />
-          </Group>
+          <Circle
+            x={originX}
+            y={originY}
+            radius={4}
+            fill="red"
+            draggable
+            onDragMove={(e) => {
+              handleElementClick();
+              const node = e.target;
+              
+              if (transform.position.reference === 'container') {
+                const newX = (node.x() - containerPos.x) / containerPos.width;
+                const newY = (node.y() - containerPos.y) / containerPos.height;
+                
+                const updates = {
+                  ...transform,
+                  position: {
+                    ...transform.position,
+                    x: newX,
+                    y: newY
+                  }
+                };
+                updateAsset(containerId, asset.id, updates, orientation);
+              } else {
+                const refAsset = container.assets[transform.position.reference];
+                if (!refAsset) return;
+
+                const refOrigin = calculateOriginPoint(containerId, refAsset.id, refAsset[orientation]);
+                if (!refOrigin) return;
+
+                const newX = (node.x() - refOrigin.x) / containerPos.width;
+                const newY = (node.y() - refOrigin.y) / containerPos.height;
+
+                const updates = {
+                  ...transform,
+                  position: {
+                    ...transform.position,
+                    x: newX,
+                    y: newY
+                  }
+                };
+                updateAsset(containerId, asset.id, updates, orientation);
+              }
+            }}
+          />
         )}
       </Group>
     );
@@ -1028,60 +1032,59 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       let newY = currentY;
 
       if (transform.position.reference === 'container') {
-        // Handle container-relative positioning
+        // Handle container-relative positioning with origin offset
         if (alignment.horizontal) {
           switch (alignment.horizontal) {
             case 'left':
-              newX = 0;
+              newX = -0.5; // Left edge of container
               break;
             case 'center':
-              newX = 0.5;
+              newX = 0; // Center of container
               break;
             case 'right':
-              newX = 1;
+              newX = 0.5; // Right edge of container
               break;
           }
         } else if (alignment.vertical) {
           switch (alignment.vertical) {
             case 'top':
-              newY = 0;
+              newY = -0.5; // Top edge of container
               break;
             case 'middle':
-              newY = 0.5;
+              newY = 0; // Middle of container
               break;
             case 'bottom':
-              newY = 1;
+              newY = 0.5; // Bottom edge of container
               break;
           }
         }
       } else {
-        // Handle asset-relative positioning - Simplified to match properties panel
+        // Handle asset-relative positioning with origin offset
         const refAsset = container.assets[transform.position.reference];
         if (!refAsset) return;
 
-        // Use same simple 0-1 positioning as container reference
         if (alignment.horizontal) {
           switch (alignment.horizontal) {
             case 'left':
-              newX = 0;
+              newX = -0.5; // Left edge of reference asset
               break;
             case 'center':
-              newX = 0.5;
+              newX = 0; // Center of reference asset
               break;
             case 'right':
-              newX = 1;
+              newX = 0.5; // Right edge of reference asset
               break;
           }
         } else if (alignment.vertical) {
           switch (alignment.vertical) {
             case 'top':
-              newY = 0;
+              newY = -0.5; // Top edge of reference asset
               break;
             case 'middle':
-              newY = 0.5;
+              newY = 0; // Middle of reference asset
               break;
             case 'bottom':
-              newY = 1;
+              newY = 0.5; // Bottom edge of reference asset
               break;
           }
         }
@@ -1104,17 +1107,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const updateDependentAssets = (assetId: string) => {
         Object.entries(container.assets).forEach(([id, dependentAsset]) => {
           if (dependentAsset[orientation].position.reference === assetId) {
-            const currentTransform = dependentAsset[orientation];
-            // Only update the axis that changed in the reference
-            const updates = {
-              ...currentTransform,
-              position: {
-                ...currentTransform.position,
-                x: alignment.horizontal ? currentTransform.position.x : currentTransform.position.x,
-                y: alignment.vertical ? currentTransform.position.y : currentTransform.position.y
-              }
-            };
-            updateAsset(selectedId, id, updates, orientation);
+            updateAsset(selectedId, id, dependentAsset[orientation], orientation);
             updateDependentAssets(id);
           }
         });
@@ -1182,7 +1175,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                     ...(deltaY !== 0 ? { y: assetTransform.position.y } : {})
                   }
                 };
-                updateAsset(childContainer.id, assetId, assetUpdates, orientation);
+                updateAsset(selectedId, assetId, assetUpdates, orientation);
               }
             });
 
@@ -1249,7 +1242,7 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                   ...(deltaY !== 0 ? { y: assetTransform.position.y } : {})
                 }
               };
-              updateAsset(childContainer.id, assetId, assetUpdates, orientation);
+              updateAsset(selectedId, assetId, assetUpdates, orientation);
             }
           });
 
