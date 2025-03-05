@@ -1,0 +1,89 @@
+# Feature: Origin Update
+
+## Overview
+- **Purpose**: Update asset positioning when origin point changes to maintain visual position
+- **Type**: Enhancement
+- **Priority**: High
+
+## Requirements
+- When origin point is changed:
+  1. The position values REMAIN THE SAME
+  2. Only the reference point on the image changes (where we measure position from)
+  3. This causes the image to shift visually because we're measuring from a different point
+- Example:
+  ```
+  Initial:
+  - Image position: (0,0)
+  - Origin: (0.5, 0.5) [center]
+  - Visual result: Image's center is at container's (0,0)
+
+  After origin change to (0,0) [top-left]:
+  - Image position: STAYS at (0,0)
+  - Origin: (0,0) [top-left]
+  - Visual result: Image's top-left is at container's (0,0)
+  ```
+- Same behavior for asset references:
+  - Position values are relative to reference asset
+  - Position values stay same when origin changes
+  - Only the reference point on the image changes
+- Changes should cascade to dependent assets
+
+## Implementation Plan
+- [x] Analyze current origin point calculation and positioning logic
+- [x] Design origin update algorithm:
+  ```typescript
+  // When origin changes
+  // No position compensation needed!
+  // Just update the origin and let the rendering handle the visual change
+  newPosition = oldPosition // stays the same
+  ```
+- [x] Found issue: Konva Image offsetX/offsetY props are hardcoded to center
+  ```typescript
+  // Current (incorrect):
+  <Image
+    offsetX={width / 2}  // Always centers
+    offsetY={height / 2} // Always centers
+  />
+  
+  // Should be:
+  <Image
+    offsetX={width * transform.origin.x}  // Uses origin from transform
+    offsetY={height * transform.origin.y} // Uses origin from transform
+  />
+  ```
+- [x] Implement fix in Canvas.tsx:
+  - [x] Update Image component to use transform.origin for offsets
+  - [ ] Verify position values stay same during origin changes
+  - [ ] Test with different origin values
+- [ ] Test with scenarios:
+  - [ ] Container-referenced asset: origin center to top-left (position should stay same)
+  - [ ] Asset-referenced asset: origin center to top-left (position should stay same)
+  - [ ] Nested references: verify visual positions update correctly
+  - [ ] Different scale modes remain consistent
+  - [ ] Both portrait/landscape orientations
+
+## Technical Considerations
+- Position values should NOT change when origin changes
+- Visual position changes are handled by Konva's offsetX/offsetY props
+- Asset reference positions follow same principle
+- Scale modes and orientations don't affect this behavior
+
+## Progress History
+
+### 2025-03-06 03:26:16 - Initial Setup
+- [x] Created feature plan
+- [x] Next tasks identified
+
+### 2025-03-06 03:40:00 - Algorithm Design
+- [x] Clarified origin update behavior with examples
+- [x] Corrected misconception about position changes
+- [x] Simplified algorithm - no position compensation needed
+
+### 2025-03-06 03:45:00 - Root Cause Analysis
+- [x] Identified issue with hardcoded center origin in Konva Image component
+- [x] Determined correct solution using transform.origin values
+- [x] Ready for implementation in Canvas.tsx
+
+### 2025-03-06 03:50:00 - Implementation
+- [x] Updated Image component in Canvas.tsx to use transform.origin for offsets
+- [ ] Ready for testing with different scenarios 

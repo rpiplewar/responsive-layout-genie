@@ -704,8 +704,8 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
           y={originY}
           width={width}
           height={height}
-          offsetX={width / 2}
-          offsetY={height / 2}
+          offsetX={width * transform.origin.x}
+          offsetY={height * transform.origin.y}
           rotation={transform.rotation}
           draggable={!isLocked}
           transformable={!isLocked}
