@@ -499,12 +499,26 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     
     const containerPos = container[orientation];
     
+    // Debug logging for position calculations
+    console.log('[POSITION] Calculating origin point:', {
+      containerId,
+      assetId,
+      transform,
+      containerPos
+    });
+    
     if (transform.position.reference === 'container') {
-      // For container reference, position is relative to container center
-      return {
-        x: containerPos.x + transform.position.x * containerPos.width,
-        y: containerPos.y + transform.position.y * containerPos.height
-      };
+      // For container reference:
+      // 1. Container's origin is always at center (0.5, 0.5)
+      // 2. Asset's origin point (e.g., 0,0 for top-left) determines the offset
+      // 3. Position is relative to container's center, so (0,0) means center
+      
+      // Add 0.5 to position to make (0,0) the center point
+      const x = containerPos.x + (transform.position.x + 0.5 - transform.origin.x) * containerPos.width;
+      const y = containerPos.y + (transform.position.y + 0.5 - transform.origin.y) * containerPos.height;
+      
+      console.log('[POSITION] Container reference result:', { x, y });
+      return { x, y };
     }
 
     const refAsset = container.assets[transform.position.reference];
@@ -515,12 +529,26 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
     if (!refOrigin) return null;
 
     // Get the reference asset's dimensions from our cache
-    const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
-
-    return {
-      x: refOrigin.x + transform.position.x * refDimensions.width,
-      y: refOrigin.y + transform.position.y * refDimensions.height
+    const refDimensions = assetDimensionsRef.current[refAsset.id] || { 
+      width: containerPos.width, 
+      height: containerPos.height 
     };
+
+    // For asset reference:
+    // 1. Calculate position relative to reference asset's position
+    // 2. Account for both assets' origin points
+    // 3. Scale by reference asset's dimensions
+    const x = refOrigin.x + (transform.position.x - transform.origin.x) * refDimensions.width;
+    const y = refOrigin.y + (transform.position.y - transform.origin.y) * refDimensions.height;
+
+    console.log('[POSITION] Asset reference result:', {
+      x,
+      y,
+      refOrigin,
+      refDimensions
+    });
+
+    return { x, y };
   };
 
   // Sort containers by depth before rendering
@@ -539,6 +567,63 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       const bDepth = getAbsoluteDepth(container.id, b.id);
       return aDepth - bDepth; // Lower depth renders first
     });
+  };
+
+  // Helper function to calculate relative position from absolute coordinates
+  const calculateRelativePosition = (
+    absoluteX: number,
+    absoluteY: number,
+    reference: 'container' | string,
+    container: Container,
+    transform: AssetTransform
+  ): { x: number; y: number } | null => {
+    const containerPos = container[orientation];
+
+    // Debug logging
+    console.log('[DRAG] Calculating relative position:', {
+      absoluteX,
+      absoluteY,
+      reference,
+      transform
+    });
+
+    if (reference === 'container') {
+      // For container reference:
+      // 1. Convert absolute position to container-relative
+      // 2. Account for asset's origin point
+      // 3. Convert to relative coordinates, subtracting 0.5 to make center (0,0)
+      const relativeX = (absoluteX - containerPos.x) / containerPos.width + transform.origin.x - 0.5;
+      const relativeY = (absoluteY - containerPos.y) / containerPos.height + transform.origin.y - 0.5;
+
+      console.log('[DRAG] Container relative result:', { relativeX, relativeY });
+      return { x: relativeX, y: relativeY };
+    }
+
+    // For asset reference
+    const refAsset = container.assets[reference];
+    if (!refAsset) return null;
+
+    const refTransform = refAsset[orientation];
+    const refOrigin = calculateOriginPoint(container.id, refAsset.id, refTransform);
+    if (!refOrigin) return null;
+
+    const refDimensions = assetDimensionsRef.current[refAsset.id] || {
+      width: containerPos.width,
+      height: containerPos.height
+    };
+
+    // Convert absolute position to reference-asset-relative
+    const relativeX = (absoluteX - refOrigin.x) / refDimensions.width + transform.origin.x;
+    const relativeY = (absoluteY - refOrigin.y) / refDimensions.height + transform.origin.y;
+
+    console.log('[DRAG] Asset relative result:', {
+      relativeX,
+      relativeY,
+      refOrigin,
+      refDimensions
+    });
+
+    return { x: relativeX, y: relativeY };
   };
 
   const renderContainer = (container: Container) => {
@@ -662,24 +747,6 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
       return { width, height };
     };
 
-    const calculateRelativePosition = (node: Konva.Node, referenceId: string) => {
-      const refAsset = container.assets[referenceId];
-      if (!refAsset || !refAsset.key || !imageElementsRef.current[refAsset.key]) return null;
-
-      const refTransform = refAsset[orientation];
-      const refOrigin = calculateOriginPoint(containerId, refAsset.id, refTransform);
-      if (!refOrigin) return null;
-
-      // Get the reference asset's dimensions
-      const refDimensions = assetDimensionsRef.current[refAsset.id] || { width: containerPos.width, height: containerPos.height };
-
-      // Calculate position relative to reference asset's center
-      const newX = (node.x() - refOrigin.x) / refDimensions.width;
-      const newY = (node.y() - refOrigin.y) / refDimensions.height;
-
-      return { x: newX, y: newY };
-    };
-
     const isContainerRelative = transform.position.reference === 'container';
     const referenceAssetId = !isContainerRelative ? transform.position.reference : undefined;
     const { width, height } = calculateAssetDimensions(transform, image, isContainerRelative, referenceAssetId);
@@ -745,39 +812,32 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             handleElementClick();
             const node = e.target;
             
-            if (transform.position.reference === 'container') {
-              // Match the coordinate system used in calculateOriginPoint
-              const newX = (node.x() - containerPos.x) / containerPos.width;
-              const newY = (node.y() - containerPos.y) / containerPos.height;
-              
-              const updates = {
-                ...transform,
-                position: {
-                  ...transform.position,
-                  x: newX,
-                  y: newY
-                }
-              };
-              updateAsset(containerId, asset.id, updates, orientation);
-            } else {
-              const newPos = calculateRelativePosition(node, transform.position.reference);
-              if (!newPos && lastPositionRef.current) {
-                // If calculation fails, restore last good position
+            // Calculate new relative position
+            const newPos = calculateRelativePosition(
+              node.x(),
+              node.y(),
+              transform.position.reference,
+              container,
+              transform
+            );
+
+            if (!newPos) {
+              // Restore last good position if calculation fails
+              if (lastPositionRef.current) {
                 node.x(lastPositionRef.current.x);
                 node.y(lastPositionRef.current.y);
-                return;
               }
-
-              const updates = {
-                ...transform,
-                position: {
-                  ...transform.position,
-                  x: newPos.x,
-                  y: newPos.y
-                }
-              };
-              updateAsset(containerId, asset.id, updates, orientation);
+              return;
             }
+
+            const updates = {
+              ...transform,
+              position: {
+                ...transform.position,
+                x: newPos.x,
+                y: newPos.y
+              }
+            };
 
             // Store last good position
             lastPositionRef.current = {
@@ -785,11 +845,13 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               y: node.y()
             };
 
+            updateAsset(containerId, asset.id, updates, orientation);
+
             // Update dependent assets
             const updateDependentAssets = (assetId: string) => {
               Object.entries(container.assets).forEach(([id, dependentAsset]) => {
                 if (dependentAsset[orientation].position.reference === assetId) {
-                  updateAsset(selectedId, id, dependentAsset[orientation], orientation);
+                  updateAsset(containerId, id, dependentAsset[orientation], orientation);
                   updateDependentAssets(id);
                 }
               });
@@ -801,12 +863,6 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
             handleElementClick();
             const node = e.target;
             
-            // Get current scale and position before any resets
-            const scaleX = node.scaleX();
-            const scaleY = node.scaleY();
-            const currentAbsX = node.x();
-            const currentAbsY = node.y();
-            
             // Get the reference dimensions
             const isContainerRelative = transform.position.reference === 'container';
             const baseWidth = isContainerRelative ? containerPos.width : (
@@ -816,53 +872,70 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
               assetDimensionsRef.current[transform.position.reference]?.height || containerPos.height
             );
             
-            // Calculate new absolute dimensions
-            let newAbsWidth = node.width() * scaleX;
-            let newAbsHeight = node.height() * scaleY;
+            // Calculate new dimensions and position
+            const { width: newWidth, height: newHeight, x: newX, y: newY } = calculateTransformedDimensions(
+              node,
+              image,
+              transform,
+              baseWidth,
+              baseHeight
+            );
             
-            // If maintaining aspect ratio, adjust dimensions
-            if (transform.maintainAspectRatio && image) {
-              const imageAspectRatio = image.width / image.height;
-              const newAspectRatio = newAbsWidth / newAbsHeight;
-              
-              if (transform.scaleMode === 'fit') {
-                if (newAspectRatio > imageAspectRatio) {
-                  newAbsWidth = newAbsHeight * imageAspectRatio;
-                } else {
-                  newAbsHeight = newAbsWidth / imageAspectRatio;
-                }
-              } else if (transform.scaleMode === 'fill') {
-                if (newAspectRatio > imageAspectRatio) {
-                  newAbsHeight = newAbsWidth / imageAspectRatio;
-                } else {
-                  newAbsWidth = newAbsHeight * imageAspectRatio;
-                }
+            // Calculate new relative position
+            const newPos = calculateRelativePosition(
+              newX,
+              newY,
+              transform.position.reference,
+              container,
+              transform
+            );
+            
+            if (!newPos) {
+              // Restore last good position if calculation fails
+              if (lastPositionRef.current) {
+                node.x(lastPositionRef.current.x);
+                node.y(lastPositionRef.current.y);
               }
+              return;
             }
             
-            // Convert to relative sizes
-            const newWidth = Math.max(0.01, newAbsWidth / baseWidth);
-            const newHeight = Math.max(0.01, newAbsHeight / baseHeight);
-            
-            // Create the update with new dimensions
+            // Create the update with new dimensions and position
             const updates = {
               ...transform,
               size: {
                 width: newWidth,
                 height: newHeight
+              },
+              position: {
+                ...transform.position,
+                x: newPos.x,
+                y: newPos.y
               }
             };
             
-            // Reset scale AFTER calculating new dimensions
+            // Reset scale after calculating new dimensions
             node.scaleX(1);
             node.scaleY(1);
             
-            // Restore absolute position to prevent jumping
-            node.x(currentAbsX);
-            node.y(currentAbsY);
+            // Store last good position
+            lastPositionRef.current = {
+              x: newX,
+              y: newY
+            };
             
-            // Apply the update
+            // Update the asset
             updateAsset(containerId, asset.id, updates, orientation);
+            
+            // Update dependent assets
+            const updateDependentAssets = (assetId: string) => {
+              Object.entries(container.assets).forEach(([id, dependentAsset]) => {
+                if (dependentAsset[orientation].position.reference === assetId) {
+                  updateAsset(containerId, id, dependentAsset[orientation], orientation);
+                  updateDependentAssets(id);
+                }
+              });
+            };
+            updateDependentAssets(asset.id);
           }}
           onDragEnd={() => {
             if (isLocked) return;
@@ -1257,6 +1330,67 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
   // Add lastPositionRef near other refs
   const lastPositionRef = useRef<{x: number, y: number} | null>(null);
 
+  // Helper function to calculate transformed dimensions while preserving origin
+  const calculateTransformedDimensions = (
+    node: Konva.Node,
+    image: HTMLImageElement | null,
+    transform: AssetTransform,
+    baseWidth: number,
+    baseHeight: number
+  ): { width: number, height: number, x: number, y: number } => {
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+    const rotation = node.rotation();
+    
+    // Get current absolute position (center of the asset)
+    const currentAbsX = node.x();
+    const currentAbsY = node.y();
+    
+    // Calculate new absolute dimensions
+    let newAbsWidth = node.width() * scaleX;
+    let newAbsHeight = node.height() * scaleY;
+    
+    // If maintaining aspect ratio, adjust dimensions
+    if (transform.maintainAspectRatio && image) {
+      const imageAspectRatio = image.width / image.height;
+      const newAspectRatio = newAbsWidth / newAbsHeight;
+      
+      if (transform.scaleMode === 'fit') {
+        if (newAspectRatio > imageAspectRatio) {
+          newAbsWidth = newAbsHeight * imageAspectRatio;
+        } else {
+          newAbsHeight = newAbsWidth / imageAspectRatio;
+        }
+      } else if (transform.scaleMode === 'fill') {
+        if (newAspectRatio > imageAspectRatio) {
+          newAbsHeight = newAbsWidth / imageAspectRatio;
+        } else {
+          newAbsWidth = newAbsHeight * imageAspectRatio;
+        }
+      }
+    }
+    
+    // Convert to relative sizes
+    const newWidth = Math.max(0.01, newAbsWidth / baseWidth);
+    const newHeight = Math.max(0.01, newAbsHeight / baseHeight);
+    
+    // Calculate new position that preserves the origin point
+    const offsetX = (newAbsWidth - node.width()) * transform.origin.x;
+    const offsetY = (newAbsHeight - node.height()) * transform.origin.y;
+    
+    // Apply rotation transformation to the offset
+    const rad = rotation * Math.PI / 180;
+    const rotatedOffsetX = offsetX * Math.cos(rad) - offsetY * Math.sin(rad);
+    const rotatedOffsetY = offsetX * Math.sin(rad) + offsetY * Math.cos(rad);
+    
+    return {
+      width: newWidth,
+      height: newHeight,
+      x: currentAbsX - rotatedOffsetX,
+      y: currentAbsY - rotatedOffsetY
+    };
+  };
+
   return (
     <div 
       ref={containerRef}
@@ -1362,13 +1496,82 @@ export const Canvas = ({ orientation, isInfinite, transform }: CanvasProps) => {
                 <Transformer
                   ref={transformerRef}
                   boundBoxFunc={(oldBox, newBox) => {
+                    // Enforce minimum size
                     const minSize = 5;
                     if (newBox.width < minSize || newBox.height < minSize) {
                       return oldBox;
                     }
+
+                    // For assets, apply additional constraints
+                    if (selectedAssetId && selectedId) {
+                      const container = containers.find(c => c.id === selectedId);
+                      const asset = container?.assets[selectedAssetId];
+                      if (container && asset) {
+                        const transform = asset[orientation];
+                        
+                        // Get reference dimensions
+                        const isContainerRef = transform.position.reference === 'container';
+                        const refWidth = isContainerRef ? container[orientation].width :
+                          assetDimensionsRef.current[transform.position.reference]?.width || container[orientation].width;
+                        const refHeight = isContainerRef ? container[orientation].height :
+                          assetDimensionsRef.current[transform.position.reference]?.height || container[orientation].height;
+
+                        // Apply maximum size constraints relative to reference
+                        if (newBox.width > refWidth * 2) return oldBox;
+                        if (newBox.height > refHeight * 2) return oldBox;
+                      }
+                    }
+                    
                     return newBox;
                   }}
+                  rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+                  rotationSnapTolerance={5}
                   keepRatio={selectedAssetId ? containers.find(c => c.id === selectedId)?.assets[selectedAssetId]?.[orientation].maintainAspectRatio : false}
+                  anchorStyleFunc={(anchor) => {
+                    // Style anchor points based on origin for assets
+                    if (selectedAssetId && selectedId) {
+                      const container = containers.find(c => c.id === selectedId);
+                      const asset = container?.assets[selectedAssetId];
+                      if (asset) {
+                        const transform = asset[orientation];
+                        const origin = transform.origin;
+                        
+                        // Highlight anchor points near the origin
+                        const isNearOrigin = (point: string): boolean => {
+                          const map: Record<string, boolean> = {
+                            'top-left': origin.x < 0.25 && origin.y < 0.25,
+                            'top-center': origin.x === 0.5 && origin.y < 0.25,
+                            'top-right': origin.x > 0.75 && origin.y < 0.25,
+                            'middle-left': origin.x < 0.25 && origin.y === 0.5,
+                            'middle-right': origin.x > 0.75 && origin.y === 0.5,
+                            'bottom-left': origin.x < 0.25 && origin.y > 0.75,
+                            'bottom-center': origin.x === 0.5 && origin.y > 0.75,
+                            'bottom-right': origin.x > 0.75 && origin.y > 0.75
+                          };
+                          return map[point] || false;
+                        };
+
+                        const anchorName = String(anchor.name || '');
+                        return {
+                          fill: isNearOrigin(anchorName) ? '#bb9af7' : '#7aa2f7',
+                          stroke: '#1a1b26',
+                          strokeWidth: 1,
+                          size: isNearOrigin(anchorName) ? 8 : 6
+                        };
+                      }
+                    }
+                    
+                    // Default anchor style for containers
+                    return {
+                      fill: '#7aa2f7',
+                      stroke: '#1a1b26',
+                      strokeWidth: 1,
+                      size: 6
+                    };
+                  }}
+                  borderStroke={selectedAssetId ? '#bb9af7' : '#7aa2f7'}
+                  borderDash={selectedAssetId ? [5, 5] : undefined}
+                  padding={5}
                 />
               )}
             </Group>

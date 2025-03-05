@@ -1,0 +1,161 @@
+# Feature: Asset Origin and Position Refactor
+
+## Overview
+- **Purpose**: Implement correct asset positioning based on origin points and references
+- **Type**: Enhancement/Fix
+- **Priority**: High
+- **Status**: In Progress
+
+## Requirements
+
+### 1. Asset-to-Container Reference Positioning
+- Origin (0,0) + Position (0,0) = Asset's top-left at container center
+- Origin (0.5,0.5) + Position (0,0) = Asset's center at container center
+- Origin (1,1) + Position (0.5,0.5) = Asset's bottom-right at container's mid-point
+
+### 2. Asset-to-Asset Reference Positioning
+- Origin (0,0) + Position (0,0) = Asset's top-left at reference's top-left
+- Origin (0.5,0.5) + Position (0,0) = Asset's center at reference's top-left
+- Origin (1,1) + Position (0.5,0.5) = Asset's bottom-right at reference's mid-point
+
+## Dependencies
+1. Canvas.tsx
+   - calculateOriginPoint function
+   - onDragMove handlers
+   - handleTransform
+   - handleAlign
+2. layoutStore.ts
+   - Asset transform interfaces
+   - Position calculation utilities
+
+## Implementation Plan
+
+### Phase 1: Core Position Calculation
+1. Update calculateOriginPoint function
+   - [ ] Add origin offset calculations
+   - [ ] Update container reference logic
+   - [ ] Update asset reference logic
+   - [ ] Add validation for edge cases
+   - [ ] Add debug logging for position calculations
+
+2. Validation Layer
+   - [ ] Add position validation utilities
+   - [ ] Implement boundary checks
+   - [ ] Add warning system for invalid positions
+
+### Phase 2: Interaction Handlers
+1. Drag Operations
+   - [ ] Update onDragMove handlers
+   - [ ] Implement reverse position calculation
+   - [ ] Add position snapping
+   - [ ] Update visual feedback
+
+2. Transform Operations
+   - [ ] Update transform handler
+   - [ ] Add origin point preservation
+   - [ ] Fix scaling behavior
+   - [ ] Update transformer anchor points
+   - [ ] Add transform constraints
+
+3. Alignment Operations
+   - [ ] Update handleAlign function
+   - [ ] Fix alignment calculations
+   - [ ] Add origin-aware snapping
+   - [ ] Update alignment guides
+
+### Phase 3: Visual Feedback
+1. Origin Point Visualization
+   - [ ] Update origin point indicator
+   - [ ] Add reference lines
+   - [ ] Improve selection feedback
+
+2. Debug Tools
+   - [ ] Add position debugging overlay
+   - [ ] Implement origin point inspector
+   - [ ] Add position history tracking
+
+## Testing Strategy
+1. Unit Tests
+   - Position calculations
+   - Transform operations
+   - Alignment logic
+
+2. Integration Tests
+   - Drag operations
+   - Multi-asset interactions
+   - Reference chain updates
+
+3. Visual Regression Tests
+   - Origin point positions
+   - Transform operations
+   - Alignment results
+
+## Rollback Plan
+1. Keep copy of original position calculation logic
+2. Implement feature toggles for new functionality
+3. Add version tracking for asset positions
+4. Create position migration utilities
+
+## Performance Considerations
+1. Optimize position calculations
+2. Minimize unnecessary updates
+3. Batch position updates
+4. Cache reference calculations
+
+## Progress History
+
+### 2025-03-04 02:05:07 - Initial Setup
+- [x] Created feature plan
+- [x] Identified core components
+- [x] Analyzed current implementation
+- [x] Started implementation of calculateOriginPoint
+
+### 2025-03-04 02:15:00 - Core Position Calculation
+- [x] Updated calculateOriginPoint with origin-aware calculations
+- [x] Added debug logging for position tracking
+- [x] Implemented container reference positioning
+- [x] Implemented asset reference positioning
+- [x] Next: Update drag operations to match new coordinate system
+
+### 2025-03-04 02:25:00 - Drag Operations
+- [x] Created calculateRelativePosition helper function
+- [x] Updated onDragMove handler with origin-aware calculations
+- [x] Added position calculation debug logging
+- [x] Fixed dependent asset updates
+- [x] Next: Update transform operations
+
+### 2025-03-04 02:35:00 - Transform Operations
+- [x] Created calculateTransformedDimensions helper function
+- [x] Updated transform handler with origin-aware calculations
+- [x] Added rotation-aware position preservation
+- [x] Implemented proper aspect ratio handling
+- [x] Added position validation and fallback
+- [x] Next: Update transformer anchor points and constraints
+
+### 2025-03-04 02:16:54 - Transformer Updates
+- [x] Add origin-aware anchor points
+- [x] Implement rotation snapping
+- [x] Add size constraints based on reference
+- [x] Update transformer appearance for different origins
+- [x] Next: Update alignment operations
+
+### 2025-03-04 02:20:00 - Alignment Operations
+- [ ] Update handleAlign function
+- [ ] Fix alignment calculations
+- [ ] Add origin-aware snapping
+- [ ] Update alignment guides
+- [ ] Next: Add visual feedback
+
+### 2025-03-04 02:25:00 - Container Reference Fix
+- [x] Fixed container reference coordinate system
+- [x] Updated calculateOriginPoint for proper center origin
+- [x] Updated calculateRelativePosition to match
+- [x] Added better comments and documentation
+- [ ] Next: Test with nested containers and assets
+
+## Success Criteria
+1. All test cases pass for different origin/position combinations
+2. No performance regression in position updates
+3. Smooth interaction with multiple nested references
+4. Clear visual feedback for origin points
+5. No breaking changes for existing layouts 
