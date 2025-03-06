@@ -148,6 +148,8 @@ export interface LayoutState {
   getAbsoluteDepth: (containerId: string, assetId?: string) => number;
   reorderDepth: (items: DepthInfo[], targetIndex: number) => void;
   moveAsset: (assetId: string, sourceContainerId: string, targetContainerId: string) => void;
+  copyOrientationToLandscape: (containerId: string) => void;
+  copyOrientationToPortrait: (containerId: string) => void;
 }
 
 interface NestedContainer {
@@ -230,22 +232,39 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   addContainer: (parentId?: string) => {
     const parent = parentId ? get().containers.find(c => c.id === parentId) : null;
+    const device = devices[get().selectedDevice];
     const newId = crypto.randomUUID();
     
     const newContainer: Container = {
       id: newId,
       name: `Container ${Date.now()}`,
       portrait: {
-        x: parent?.portrait ? (parent.portrait.x + parent.portrait.width / 2) : 50,
-        y: parent?.portrait ? (parent.portrait.y + parent.portrait.height / 2) : 50,
-        width: parent?.portrait ? parent.portrait.width * 0.5 : 100,
-        height: parent?.portrait ? parent.portrait.height * 0.5 : 100,
+        x: parent?.portrait 
+          ? parent.portrait.x  // Position at parent's origin
+          : device.width * 0.1,  // 10% of device width if no parent
+        y: parent?.portrait 
+          ? parent.portrait.y  // Position at parent's origin
+          : device.height * 0.1,  // 10% of device height if no parent
+        width: parent?.portrait 
+          ? parent.portrait.width * 0.5  // 50% of parent width
+          : device.width * 0.2,  // 20% of device width if no parent
+        height: parent?.portrait 
+          ? parent.portrait.height * 0.5  // 50% of parent height
+          : device.height * 0.2,  // 20% of device height if no parent
       },
       landscape: {
-        x: parent?.landscape ? (parent.landscape.x + parent.landscape.width / 2) : 50,
-        y: parent?.landscape ? (parent.landscape.y + parent.landscape.height / 2) : 50,
-        width: parent?.landscape ? parent.landscape.width * 0.5 : 100,
-        height: parent?.landscape ? parent.landscape.height * 0.5 : 100,
+        x: parent?.landscape 
+          ? parent.landscape.x  // Position at parent's origin
+          : device.height * 0.1,
+        y: parent?.landscape 
+          ? parent.landscape.y  // Position at parent's origin
+          : device.width * 0.1,
+        width: parent?.landscape 
+          ? parent.landscape.width * 0.5
+          : device.height * 0.2,
+        height: parent?.landscape 
+          ? parent.landscape.height * 0.5
+          : device.width * 0.2,
       },
       parentId,
       assets: {},
@@ -472,19 +491,35 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const { containers } = get();
     const device = devices[get().selectedDevice];
 
-    const processContainer = (container: Container): ExportedContainer => {
+    const processContainer = (container: Container, parentDimensions?: { portrait: ContainerPosition, landscape: ContainerPosition }): ExportedContainer => {
       const result: ExportedContainer = {
         portrait: {
-          x: container.portrait.x / device.width,
-          y: container.portrait.y / device.height,
-          width: container.portrait.width / device.width,
-          height: container.portrait.height / device.height,
+          x: parentDimensions 
+            ? (container.portrait.x - parentDimensions.portrait.x) / parentDimensions.portrait.width 
+            : container.portrait.x / device.width,
+          y: parentDimensions 
+            ? (container.portrait.y - parentDimensions.portrait.y) / parentDimensions.portrait.height
+            : container.portrait.y / device.height,
+          width: parentDimensions 
+            ? container.portrait.width / parentDimensions.portrait.width
+            : container.portrait.width / device.width,
+          height: parentDimensions 
+            ? container.portrait.height / parentDimensions.portrait.height
+            : container.portrait.height / device.height,
         },
         landscape: {
-          x: container.landscape.x / device.height,
-          y: container.landscape.y / device.width,
-          width: container.landscape.width / device.height,
-          height: container.landscape.height / device.width,
+          x: parentDimensions 
+            ? (container.landscape.x - parentDimensions.landscape.x) / parentDimensions.landscape.width
+            : container.landscape.x / device.height,
+          y: parentDimensions 
+            ? (container.landscape.y - parentDimensions.landscape.y) / parentDimensions.landscape.height
+            : container.landscape.y / device.width,
+          width: parentDimensions 
+            ? container.landscape.width / parentDimensions.landscape.width
+            : container.landscape.width / device.height,
+          height: parentDimensions 
+            ? container.landscape.height / parentDimensions.landscape.height
+            : container.landscape.height / device.width,
         },
         depth: container.depth
       };
@@ -495,6 +530,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           [id]: {
             ...asset,
             name: asset.name,
+            key: asset.key,
             depth: asset.depth,
             portrait: {
               ...asset.portrait,
@@ -512,7 +548,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         .filter(c => c.parentId === container.id)
         .reduce((acc, child) => ({
           ...acc,
-          [child.name]: processContainer(child)
+          [child.name]: processContainer(child, {
+            portrait: container.portrait,
+            landscape: container.landscape
+          })
         }), {});
 
       if (Object.keys(children).length > 0) {
@@ -614,7 +653,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const flattenContainers = (
       containers: { [key: string]: NestedContainer },
       parentId?: string,
-      level: number = 0
+      level: number = 0,
+      parentDimensions?: { portrait: ContainerPosition, landscape: ContainerPosition }
     ): Container[] => {
       const selectedDevice = devices[get().selectedDevice];
       
@@ -625,16 +665,32 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           id,
           name,
           portrait: {
-            x: container.portrait.x * selectedDevice.width,
-            y: container.portrait.y * selectedDevice.height,
-            width: container.portrait.width * selectedDevice.width,
-            height: container.portrait.height * selectedDevice.height,
+            x: parentDimensions 
+              ? parentDimensions.portrait.x + (container.portrait.x * parentDimensions.portrait.width)
+              : container.portrait.x * selectedDevice.width,
+            y: parentDimensions 
+              ? parentDimensions.portrait.y + (container.portrait.y * parentDimensions.portrait.height)
+              : container.portrait.y * selectedDevice.height,
+            width: parentDimensions 
+              ? container.portrait.width * parentDimensions.portrait.width
+              : container.portrait.width * selectedDevice.width,
+            height: parentDimensions 
+              ? container.portrait.height * parentDimensions.portrait.height
+              : container.portrait.height * selectedDevice.height,
           },
           landscape: {
-            x: container.landscape.x * selectedDevice.height,
-            y: container.landscape.y * selectedDevice.width,
-            width: container.landscape.width * selectedDevice.height,
-            height: container.landscape.height * selectedDevice.width,
+            x: parentDimensions 
+              ? parentDimensions.landscape.x + (container.landscape.x * parentDimensions.landscape.width)
+              : container.landscape.x * selectedDevice.height,
+            y: parentDimensions 
+              ? parentDimensions.landscape.y + (container.landscape.y * parentDimensions.landscape.height)
+              : container.landscape.y * selectedDevice.width,
+            width: parentDimensions 
+              ? container.landscape.width * parentDimensions.landscape.width
+              : container.landscape.width * selectedDevice.height,
+            height: parentDimensions 
+              ? container.landscape.height * parentDimensions.landscape.height
+              : container.landscape.height * selectedDevice.width,
           },
           parentId,
           assets: container.assets ? Object.entries(container.assets).reduce((acc, [id, asset]) => ({
@@ -642,7 +698,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             [id]: {
               ...asset,
               id,
-              key: asset.name,
+              key: asset.key || asset.name,
+              name: asset.name,
               depth: asset.depth || 0,
               portrait: {
                 ...asset.portrait,
@@ -659,7 +716,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
         };
 
         const children = container.children
-          ? flattenContainers(container.children, id, level + 1)
+          ? flattenContainers(container.children, id, level + 1, {
+              portrait: flatContainer.portrait,
+              landscape: flatContainer.landscape
+            })
           : [];
 
         return [flatContainer, ...children];
@@ -1064,5 +1124,67 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       console.log('[debug] Triggering layer store sync after asset move');
       useLayerStore.getState().syncWithLayoutStore();
     });
+  },
+
+  copyOrientationToLandscape: (containerId: string) => {
+    const state = get();
+    const containers = [...state.containers];
+    
+    // Helper function to copy container and its children
+    const copyContainerOrientation = (container: Container) => {
+      // Copy container properties
+      container.landscape = { ...container.portrait };
+      
+      // Copy all assets in the container
+      Object.values(container.assets).forEach(asset => {
+        asset.landscape = { ...asset.portrait };
+      });
+      
+      // Find and process child containers
+      const childContainers = containers.filter(c => c.parentId === container.id);
+      childContainers.forEach(copyContainerOrientation);
+    };
+    
+    // Find the target container
+    const container = containers.find(c => c.id === containerId);
+    if (!container) return;
+    
+    // Copy orientations
+    copyContainerOrientation(container);
+    
+    // Save to history and update state
+    state.saveToHistory(containers);
+    set({ containers });
+  },
+
+  copyOrientationToPortrait: (containerId: string) => {
+    const state = get();
+    const containers = [...state.containers];
+    
+    // Helper function to copy container and its children
+    const copyContainerOrientation = (container: Container) => {
+      // Copy container properties
+      container.portrait = { ...container.landscape };
+      
+      // Copy all assets in the container
+      Object.values(container.assets).forEach(asset => {
+        asset.portrait = { ...asset.landscape };
+      });
+      
+      // Find and process child containers
+      const childContainers = containers.filter(c => c.parentId === container.id);
+      childContainers.forEach(copyContainerOrientation);
+    };
+    
+    // Find the target container
+    const container = containers.find(c => c.id === containerId);
+    if (!container) return;
+    
+    // Copy orientations
+    copyContainerOrientation(container);
+    
+    // Save to history and update state
+    state.saveToHistory(containers);
+    set({ containers });
   },
 }));

@@ -122,11 +122,13 @@ const Index = () => {
 
       const imageFiles = Object.entries(assetsFolder.files)
         .filter(([path, file]) => !file.dir && path.endsWith('.png'))
-        .map(([_, file]) => file);
+        .map(([path, file]) => ({
+          file,
+          assetId: path.replace('assets/', '').replace('.png', '')
+        }));
 
       // Upload all images
-      const uploadPromises = imageFiles.map(async (file) => {
-        const assetId = file.name.replace('assets/', '').replace('.png', '');
+      const uploadPromises = imageFiles.map(async ({ file, assetId }) => {
         const blob = await file.async('blob');
         const imageFile = new File([blob], `${assetId}.png`, { type: 'image/png' });
         
@@ -147,8 +149,31 @@ const Index = () => {
 
       await Promise.all(uploadPromises);
 
-      // Import the configuration
-      importConfig(config);
+      type AssetType = { key?: string };
+      type ContainerType = { assets?: Record<string, AssetType> };
+      
+      // Update config to ensure asset keys match file names
+      const updatedConfig = {
+        ...config,
+        containers: Object.entries(config.containers as Record<string, ContainerType>).reduce((acc, [name, container]) => {
+          if (container.assets) {
+            container.assets = Object.entries(container.assets).reduce((assetAcc, [id, asset]) => ({
+              ...assetAcc,
+              [id]: {
+                ...asset,
+                key: asset.key || id // Use existing key or fallback to id
+              }
+            }), {} as Record<string, AssetType>);
+          }
+          return {
+            ...acc,
+            [name]: container
+          };
+        }, {} as Record<string, ContainerType>)
+      };
+
+      // Import the updated configuration
+      importConfig(updatedConfig);
 
       toast({
         title: "Import complete",
